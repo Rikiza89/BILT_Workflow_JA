@@ -1,0 +1,2176 @@
+{% extends "base.html" %}
+{% block title %}BILT 物体検知{% endblock %}
+
+{% block head %}
+<style>
+    /* Light mode overrides for hard-coded dark values */
+    [data-theme="light"] body { background: var(--bg); color: var(--text); }
+    [data-theme="light"] .sidebar { background: var(--surface); border-color: var(--border2); }
+    [data-theme="light"] .form-label { color: var(--muted); }
+    [data-theme="light"] .form-select,
+    [data-theme="light"] .form-input {
+        background: var(--input-bg); border-color: var(--border); color: var(--text);
+    }
+    [data-theme="light"] .form-select:focus,
+    [data-theme="light"] .form-input:focus {
+        border-color: var(--accent); background: var(--input-bg);
+    }
+    [data-theme="light"] .form-select option { background: var(--surface); color: var(--text); }
+    [data-theme="light"] .dc-btn-secondary { background: var(--surface2); color: var(--text); }
+    [data-theme="light"] .dc-btn-secondary:hover:not(:disabled) { background: var(--border); }
+    [data-theme="light"] .slider { background: var(--border); }
+    [data-theme="light"] .checkbox-label { color: var(--text); }
+    [data-theme="light"] .class-list { background: var(--surface); border-color: var(--border); }
+    [data-theme="light"] .class-item { border-color: var(--border); }
+    [data-theme="light"] .class-item:hover { background: var(--surface2); }
+    [data-theme="light"] .class-name { color: var(--text); }
+    [data-theme="light"] .class-count-input {
+        background: var(--surface); border-color: var(--border); color: var(--text);
+    }
+    [data-theme="light"] .counter-item { background: var(--surface2); border-color: var(--border); }
+    [data-theme="light"] .counter-label { color: var(--text); }
+    [data-theme="light"] .dc-modal-content { background: var(--surface); border-color: var(--border); }
+    [data-theme="light"] .dc-modal-header { color: var(--text); }
+    [data-theme="light"] .chain-step { background: var(--surface2); border-color: var(--border); }
+    [data-theme="light"] .chain-step-name { color: var(--text); }
+    [data-theme="light"] .chain-status { background: var(--surface2); border-color: var(--border); }
+    [data-theme="light"] .chain-status-text { color: var(--text); }
+    [data-theme="light"] .chain-list-item { background: var(--surface2); border-color: var(--border); }
+    [data-theme="light"] .chain-list-item:hover { background: var(--border); }
+    [data-theme="light"] .chain-name { color: var(--text); }
+    [data-theme="light"] .panel { border-color: var(--border2); }
+    [data-theme="light"] .empty-state { color: var(--muted); }
+
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    body {
+        overflow-y: auto;
+    }
+
+    /* Main Layout */
+    .app-container {
+        display: grid;
+        grid-template-rows: auto 1fr;
+        height: calc(100vh - 52px);
+        min-height: 500px;
+    }
+
+    /* Status Bar */
+    .status-bar {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        padding: 8px 20px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        justify-content: flex-end;
+        flex-shrink: 0;
+    }
+
+    .status-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--muted);
+    }
+
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #ef4444;
+    }
+
+    .status-dot.active {
+        background: #10b981;
+        box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+    }
+
+    /* Main Content */
+    .main-content {
+        display: grid;
+        grid-template-columns: 300px 1fr 300px;
+        height: 100%;        /* 🔥 critical */
+        min-height: 0;
+    }
+
+    /* Sidebar */
+    .sidebar {
+        background: var(--surface);
+        border-right: 1px solid var(--border);
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .sidebar.right {
+        border-right: none;
+        border-left: 1px solid var(--border);
+    }
+
+    /* Video Display */
+    .video-display {
+        background: #000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        width: 100%;
+        height: 100%;
+        min-height: 0;        /* 🔥 prevents collapse */
+        overflow: hidden;
+    }
+
+    .video-stream {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        border-radius: 4px;
+    }
+
+    .video-overlay {
+        position: absolute;
+        bottom: 2%;
+        left: 50%;
+        transform: translateX(-50%);
+        
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        justify-content: center;
+
+        width: 90%;
+        max-width: 400px;
+
+        z-index: 20;   /* 🔥 ensures visible */
+    }
+
+    /* Make buttons responsive */
+    .video-overlay button {
+        flex: 1 1 auto;
+        min-width: 120px;
+    }
+
+    /* Form Elements */
+    .form-group {
+        margin-bottom: 16px;
+    }
+
+    .form-label {
+        display: block;
+        font-size: 13px;
+        color: var(--muted);
+        margin-bottom: 8px;
+        font-weight: 500;
+    }
+
+    .form-select, .form-input {
+        width: 100%;
+        padding: 10px 12px;
+        background: var(--bg);
+        border: 1px solid var(--border2);
+        border-radius: 6px;
+        color: var(--text);
+        font-size: 14px;
+        transition: all 0.2s;
+    }
+
+    .form-select:focus, .form-input:focus {
+        outline: none;
+        border-color: var(--accent-hi);
+        background: var(--surface);
+    }
+
+    .form-select option {
+        background: var(--surface);
+        color: var(--text);
+    }
+
+    /* Buttons */
+    .dc-btn {
+        padding: 10px 18px;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .dc-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .dc-btn-primary {
+        background: var(--accent-hi);
+        color: #fff;
+    }
+
+    .dc-btn-primary:hover:not(:disabled) {
+        background: var(--accent);
+        transform: translateY(-1px);
+    }
+
+    .dc-btn-success {
+        background: #10b981;
+        color: #fff;
+    }
+
+    .dc-btn-success:hover:not(:disabled) {
+        background: #059669;
+    }
+
+    .dc-btn-danger {
+        background: #ef4444;
+        color: #fff;
+    }
+
+    .dc-btn-danger:hover:not(:disabled) {
+        background: #dc2626;
+    }
+
+    .dc-btn-secondary {
+        background: var(--border2);
+        color: var(--text);
+    }
+
+    .dc-btn-secondary:hover:not(:disabled) {
+        background: var(--surface2);
+    }
+
+    .dc-btn-group {
+        display: flex;
+        gap: 8px;
+    }
+
+    /* Slider */
+    .slider-group {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .slider {
+        flex: 1;
+        height: 6px;
+        border-radius: 3px;
+        background: var(--border2);
+        outline: none;
+        -webkit-appearance: none;
+    }
+
+    .slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--accent-hi);
+        cursor: pointer;
+    }
+
+    .slider::-moz-range-thumb {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--accent-hi);
+        cursor: pointer;
+        border: none;
+    }
+
+    .slider-value {
+        min-width: 45px;
+        text-align: right;
+        font-size: 13px;
+        color: var(--accent-hi);
+        font-weight: 600;
+    }
+
+    /* Checkbox */
+    .checkbox-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 0;
+    }
+
+    .checkbox {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+    }
+
+    .checkbox-label {
+        font-size: 14px;
+        color: var(--text);
+        cursor: pointer;
+    }
+
+    /* Class List */
+    .class-list {
+        max-height: 300px;
+        overflow-y: auto;
+        border: 1px solid var(--border2);
+        border-radius: 6px;
+        background: var(--bg);
+    }
+
+    .class-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border2);
+    }
+
+    .class-item:last-child {
+        border-bottom: none;
+    }
+
+    .class-item:hover {
+        background: var(--surface);
+    }
+
+    .class-name {
+        flex: 1;
+        font-size: 13px;
+        color: var(--text);
+    }
+
+    .class-count-input {
+        width: 60px;
+        padding: 4px 8px;
+        background: var(--surface);
+        border: 1px solid var(--border2);
+        border-radius: 4px;
+        color: var(--text);
+        font-size: 12px;
+        text-align: center;
+    }
+
+    /* Counter Display */
+    .counter-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .counter-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 12px;
+        background: var(--bg);
+        border-radius: 6px;
+        border: 1px solid var(--border2);
+    }
+
+    .counter-label {
+        font-size: 13px;
+        color: var(--text);
+    }
+
+    .counter-value {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--accent-hi);
+    }
+
+    /* Chain Steps */
+    .chain-steps {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .chain-step {
+        background: var(--bg);
+        border: 1px solid var(--border2);
+        border-radius: 6px;
+        padding: 12px;
+    }
+
+    .chain-step-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+
+    .chain-step-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text);
+    }
+
+    .chain-step-delete {
+        background: transparent;
+        border: none;
+        color: #ef4444;
+        cursor: pointer;
+        font-size: 12px;
+        padding: 4px 8px;
+    }
+
+    .chain-step-classes {
+        font-size: 12px;
+        color: var(--muted);
+    }
+
+    /* Chain Status */
+    .chain-status {
+        background: var(--bg);
+        border: 1px solid var(--border2);
+        border-radius: 6px;
+        padding: 12px;
+    }
+
+    .chain-status-text {
+        font-size: 13px;
+        color: var(--text);
+        margin-bottom: 8px;
+    }
+
+    .dc-progress-bar {
+        height: 6px;
+        background: var(--border2);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--accent-hi), var(--accent));
+        transition: width 0.3s ease;
+    }
+
+    /* Modal */
+    .dc-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+    }
+
+    .dc-modal-content {
+        background: var(--surface);
+        border: 1px solid var(--border2);
+        border-radius: 8px;
+        padding: 24px;
+        max-width: 500px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+
+    .dc-modal-header {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text);
+        margin-bottom: 20px;
+    }
+
+    .dc-modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 20px;
+    }
+
+    /* Alert Modal */
+    .alert-modal {
+        background: rgba(0, 0, 0, 0.95);
+    }
+
+    .alert-content {
+        background: linear-gradient(135deg, #dc2626, #991b1b);
+        border: 2px solid #ef4444;
+        padding: 40px;
+        text-align: center;
+        max-width: 450px;
+    }
+
+    .alert-icon {
+        font-size: 60px;
+        margin-bottom: 16px;
+    }
+
+    .alert-title {
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 16px;
+    }
+
+    .alert-message {
+        font-size: 14px;
+        margin-bottom: 8px;
+        opacity: 0.9;
+    }
+
+    .alert-detail {
+        background: rgba(0, 0, 0, 0.3);
+        padding: 12px;
+        border-radius: 6px;
+        margin: 12px 0;
+    }
+
+    /* Chain List */
+    .chain-list-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px;
+        background: var(--bg);
+        border: 1px solid var(--border2);
+        border-radius: 6px;
+        margin-bottom: 8px;
+    }
+
+    .chain-list-item:hover {
+        background: var(--surface);
+    }
+
+    .chain-info {
+        flex: 1;
+    }
+
+    .chain-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text);
+    }
+
+    .chain-details {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 4px;
+    }
+
+    .chain-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .chain-action-btn {
+        padding: 6px 12px;
+        font-size: 12px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .chain-load-btn {
+        background: #10b981;
+        color: white;
+    }
+
+    .chain-delete-btn {
+        background: #ef4444;
+        color: white;
+    }
+
+    /* Utility */
+    .hidden {
+        display: none !important;
+    }
+
+    .text-center {
+        text-align: center;
+    }
+
+    .mt-4 {
+        margin-top: 16px;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 20px;
+        color: var(--muted);
+        font-size: 13px;
+    }
+
+    /* Scrollbar */
+    .class-list::-webkit-scrollbar, .dc-modal-content::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .class-list::-webkit-scrollbar-track, .dc-modal-content::-webkit-scrollbar-track {
+        background: var(--bg);
+    }
+
+    .class-list::-webkit-scrollbar-thumb, .dc-modal-content::-webkit-scrollbar-thumb {
+        background: var(--border2);
+        border-radius: 3px;
+    }
+
+    .panel {
+        border-bottom: 1px solid var(--border);
+        padding: 0;
+    }
+
+    .panel-header {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--accent-hi);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 16px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .panel-header:hover {
+        background: rgba(96, 165, 250, 0.1);
+    }
+
+    .panel-toggle {
+        font-size: 12px;
+        transition: transform 0.3s ease;
+    }
+
+    .panel-toggle.collapsed {
+        transform: rotate(-90deg);
+    }
+    /* 
+    .panel-content {
+        padding: 0 20px 20px 20px;
+        max-height: 2000px;
+        overflow: hidden;
+        transition: max-height 0.3s ease, padding 0.3s ease;
+    } */
+    .panel-content {
+        padding: 0 20px 20px 20px;
+        overflow-y: auto;
+        max-height: none;
+        transition: padding 0.3s ease;
+    }
+
+    .sidebar {
+    overflow-y: auto;
+    min-height: 0;
+    }
+    .panel-content.collapsed {
+        max-height: 0;
+        padding: 0 20px;
+    }
+
+    .no-scroll-page {
+        height: calc(100vh - 52px);
+        overflow: hidden;   /* 🔥 only this page */
+    }
+
+    .no-scroll-page .main-content {
+        height: 100%;
+    }
+
+    .no-scroll-page .sidebar {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .no-scroll-page .panel-content {
+        overflow-y: auto;   /* internal scrolling */
+    }    
+</style>
+{% endblock %}
+
+{% block outer_content %}
+    <div class="app-container no-scroll-page">
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <div class="status-item">
+                <span class="status-dot" id="camera-status-dot"></span>
+                <span id="camera-status-text">カメラ未接続</span>
+            </div>
+            <div class="status-item">
+                <span class="status-dot" id="model-status-dot"></span>
+                <span id="model-status-text">モデル未ロード</span>
+            </div>
+            <div class="status-item">
+                <span class="status-dot" id="detection-status-dot"></span>
+                <span id="detection-status-text">検知停止中</span>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Sidebar -->
+            <div class="sidebar">
+                <!-- Camera Control -->
+                <div class="panel">
+                        <div class="panel-header" onclick="togglePanel(this)">
+                        <span>カメラコントロール</span>
+                        <span class="panel-toggle">▼</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="form-group">
+                            <label class="form-label">カメラを選択</label>
+                            <select id="camera-select" class="form-select">
+                                <option value="">カメラを選択...</option>
+                            </select>
+                        </div>
+                        <button id="select-camera-btn" class="dc-btn dc-btn-success" style="width: 100%;">カメラを接続</button>
+                    </div>
+                </div>
+
+                <!-- Model Control -->
+                <div class="panel">
+                    <div class="panel-header" onclick="togglePanel(this)">
+                        <span>モデルコントロール</span>
+                        <span class="panel-toggle">▼</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="form-group">
+                            <label class="form-label">モデルを選択</label>
+                            <select id="model-select" class="form-select">
+                                <option value="">モデルを選択してください...</option>
+                            </select>
+                        </div>
+                        <button id="load-model-btn" class="dc-btn dc-btn-success" style="width: 100%;">モデルをロード</button>
+                    </div>
+                </div>
+
+                <!-- Detection Settings -->
+                <div class="panel">
+                    <div class="panel-header" onclick="togglePanel(this)">
+                        <span>検知設定</span>
+                        <span class="panel-toggle collapsed">▼</span>
+                    </div>
+                    <div class="panel-content collapsed">
+                        <div class="form-group">
+                            <label class="form-label">Confidence: <span id="conf-value" class="slider-value">0.80</span></label>
+                            <input type="range" id="conf-slider" class="slider" min="0" max="1" step="0.01" value="0.80">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">IoU: <span id="iou-value" class="slider-value">0.10</span></label>
+                            <input type="range" id="iou-slider" class="slider" min="0" max="1" step="0.01" value="0.10">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">最大検知数: <span id="max-det-value" class="slider-value">10</span></label>
+                            <input type="range" id="max-det-slider" class="slider" min="1" max="1000" value="10">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">物体検知用画像サイズ</label>
+                            <select id="image-size-select" class="form-select">
+                                <option value="640x480">640 × 480</option>
+                                <option value="1280x720">1280 × 720</option>
+                                <option value="1920x1080">1920 × 1080</option>
+                                <option value="2560x1440">2560 × 1440</option>
+                                <option value="3840x2160">3840 × 2160 (4K)</option>
+                            </select>
+                        </div>
+                        <button id="apply-image-size-btn" class="dc-btn dc-btn-primary mt-2" style="width:100%;">サイズを適用</button>
+
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="counter-mode-cb" class="checkbox">
+                            <label for="counter-mode-cb" class="checkbox-label">カウンターモードを有効にする</label>
+                        </div>
+
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="save-images-cb" class="checkbox">
+                            <label for="save-images-cb" class="checkbox-label">検知画像を保存</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Class Selection -->
+                <div class="panel">
+                    <div class="panel-header" onclick="togglePanel(this)">
+                        <span>クラス選択</span>
+                        <span class="panel-toggle collapsed">▼</span>
+                    </div>
+                    <div class="panel-content collapsed">
+                    <div class="class-list" id="classes-list">
+                        <div class="empty-state">モデルをロードしてクラスを表示</div>
+                    </div>
+                    <button id="apply-classes-btn" class="dc-btn dc-btn-primary mt-4" style="width: 100%;">選択を適用</button>
+                </div>
+                </div>
+            </div>
+
+            <!-- Video Display -->
+            <div class="video-display" style="position:relative;">
+                <img id="video-stream" class="video-stream" src="/bilt/detection/video_feed" alt="Video Stream" style="display:block;width:100%;height:100%;object-fit:contain;">
+                <!-- Kanji ラベルオーバーレイ canvas -->
+                <canvas id="label-overlay" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></canvas>
+                <!-- Backend badge -->
+                <div style="position:absolute;top:8px;left:8px;
+                     padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700;
+                     background:#7c3aed;color:#fff;z-index:10;">BILT</div>
+                <div class="video-overlay">
+                    <button id="start-detection-btn" class="dc-btn dc-btn-success">▶ 検知を開始</button>
+                    <button id="stop-detection-btn" class="dc-btn dc-btn-danger" disabled>⏹ 検知を停止</button>
+                </div>
+            </div>
+
+            <!-- Right Sidebar -->
+            <div class="sidebar right">
+                <!-- Device Info -->
+                <div class="panel">
+                    <div class="panel-header" onclick="togglePanel(this)">
+                        <span>デバイス情報</span>
+                        <span class="panel-toggle">▼</span>
+                    </div>
+                    <div class="panel-content">
+                        <div id="device-info-content" style="font-size:12px;font-family:monospace;">
+                            <div class="empty-state">読み込み中...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Counters -->
+                <div class="panel">
+                    <div class="panel-header" onclick="togglePanel(this)">
+                        <span>オブジェクトカウンター</span>
+                        <span class="panel-toggle collapsed">▼</span>
+                    </div>
+                    <div class="panel-content collapsed">
+
+                    <div class="counter-list" id="counters-list">
+                        <div class="empty-state">検知がまだありません</div>
+                    </div>
+                    <button id="reset-counters-btn" class="dc-btn dc-btn-secondary mt-4" style="width: 100%;">カウンターをリセット</button>
+                    </div>
+                </div>
+
+                <!-- Dataset Capture -->
+                <div class="panel">
+                    <div class="panel-header" onclick="togglePanel(this)">
+                        <span>データセットキャプチャ</span>
+                        <span class="panel-toggle collapsed">▼</span>
+                    </div>
+                    <div class="panel-content collapsed">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="dataset-capture-cb" class="checkbox">
+                        <label for="dataset-capture-cb" class="checkbox-label">データセットモードを有効にする</label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">プロジェクト</label>
+                        <select id="project-select" class="form-select">
+                            <option value="">プロジェクトを選択...</option>
+                        </select>
+                    </div>
+
+                    <div class="dc-btn-group">
+                        <button id="create-project-btn" class="dc-btn dc-btn-secondary" style="flex: 1;">新しいプロジェクト</button>
+                    </div>
+
+                    <div id="create-project-form" class="form-group mt-4 hidden">
+                        <label class="form-label">プロジェクト名</label>
+                        <input type="text" id="project-name-input" class="form-input" placeholder="プロジェクト名を入力">
+                        <div class="dc-btn-group mt-4">
+                            <button id="save-project-btn" class="dc-btn dc-btn-success" style="flex: 1;">保存</button>
+                            <button id="cancel-project-btn" class="dc-btn dc-btn-secondary" style="flex: 1;">キャンセル</button>
+                        </div>
+                    </div>
+                    </div>
+                </div>
+
+                <!-- Chain Detection -->
+                <div class="panel">
+                    <div class="panel-header" onclick="togglePanel(this)">
+                        <span>チェーン検出</span>
+                        <span class="panel-toggle">▼</span>
+                    </div>
+                    <div class="panel-content">
+                    <div class="dc-btn-group">
+                        <button id="start-chain-btn" class="dc-btn dc-btn-success" style="flex: 1;">▶ 開始</button>
+                        <button id="stop-chain-btn" class="dc-btn dc-btn-danger" style="flex: 1;" disabled>⏹ 停止</button>
+                    </div>
+
+                    <button id="reset-chain-btn" class="dc-btn dc-btn-secondary mt-4" style="width: 100%;">チェーンをリセット</button>
+
+                    <div class="form-group mt-4">
+                        <label class="form-label">ステップのタイムアウト: <span id="chain-timeout-value" class="slider-value">50.0</span>s</label>
+                        <input type="range" id="chain-timeout-slider" class="slider" min="1" max="150" step="0.5" value="50">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">サイクル一時停止: <span id="chain-pause-value" class="slider-value">10</span>s</label>
+                        <input type="range" id="chain-pause-slider" class="slider" min="1" max="60" step="1" value="10">
+                    </div>
+
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="chain-auto-advance-cb" class="checkbox">
+                        <label for="chain-auto-advance-cb" class="checkbox-label">タイムアウト時に自動で次のステップに進む</label>
+                    </div>
+
+                    <div class="form-group mt-4">
+                        <label class="form-label">チェーンステップ</label>
+                        <div class="chain-steps" id="chain-steps-list">
+                            <div class="empty-state">ステップが設定されていません</div>
+                        </div>
+                        <button id="add-step-btn" class="dc-btn dc-btn-primary mt-4" style="width: 100%;">+ ステップを追加</button>
+                    </div>
+
+                    <div class="dc-btn-group mt-4">
+                        <button id="save-chain-btn" class="dc-btn dc-btn-secondary" style="flex: 1;">チェーンを保存</button>
+                        <button id="load-chain-btn" class="dc-btn dc-btn-secondary" style="flex: 1;">チェーンを読み込み</button>
+                    </div>
+
+                    <div class="form-group mt-4">
+                        <label class="form-label">チェーンステータス</label>
+                        <div class="chain-status">
+                            <div class="chain-status-text" id="chain-status-text">チェーン非アクティブ</div>
+                            <div id="chain-progress"></div>
+                        </div>
+                    </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step Modal -->
+    <div id="step-modal" class="dc-modal hidden">
+        <div class="dc-modal-content">
+            <div class="dc-modal-header">チェーンステップを作成</div>
+
+            <div class="form-group">
+                <label class="form-label">ステップ名</label>
+                <input type="text" id="step-name-input" class="form-input" placeholder="例: CPU検出">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">必要なオブジェクト</label>
+                <div class="class-list" id="step-classes-list" style="max-height: 200px;">
+                    <div class="empty-state">モデルをロードしてください</div>
+                </div>
+            </div>
+
+            <div class="dc-modal-footer">
+                <button id="cancel-step-btn" class="dc-btn dc-btn-secondary">きゃんセル</button>
+                <button id="save-step-btn" class="dc-btn dc-btn-success">ステップを保存</button>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let draggedElement = null;
+    let dragOffset = { x: 0, y: 0 };
+    let currentClasses = [];
+    let selectedClasses = [];
+    let classCountLimits = {};
+    let classOrder = [];
+    let chainSteps = [];
+    let chainStatus = { active: false };
+    let audioCtx;
+    let chainStatusInterval = null;
+    let counterInterval = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Reset any leftover detection/camera state from a previous session
+        fetch('/api/bilt/detection/reset', { method: 'POST' }).catch(() => {});
+        loadCameras();
+        loadModels();
+        loadProjects();
+        setupEventListeners();
+        updateChainStatus();
+        syncDetectionState();
+        loadDeviceInfo();
+        startLabelOverlay();
+    });
+
+    async function syncDetectionState() {
+        try {
+            const resp = await fetch('/api/bilt/detection/status');
+            const data = await resp.json();
+            const active = data.active === true;
+            document.getElementById('start-detection-btn').disabled = active;
+            document.getElementById('stop-detection-btn').disabled = !active;
+            updateStatusIndicator('detection', active);
+            if (active && !counterInterval) {
+                counterInterval = setInterval(updateCounters, 2000);
+                updateCounters();
+            }
+        } catch (e) {
+            // silently ignore — default button state is fine
+        }
+    }
+
+    function togglePanel(headerElement) {
+        const content = headerElement.nextElementSibling;
+        const toggle = headerElement.querySelector('.panel-toggle');
+
+        content.classList.toggle('collapsed');
+        toggle.classList.toggle('collapsed');
+    }
+
+    function setupEventListeners() {
+        document.getElementById('select-camera-btn').addEventListener('click', selectCamera);
+        document.getElementById('load-model-btn').addEventListener('click', loadModel);
+        document.getElementById('start-detection-btn').addEventListener('click', startDetection);
+        document.getElementById('stop-detection-btn').addEventListener('click', stopDetection);
+
+        setupSlider('conf-slider', 'conf-value');
+        setupSlider('iou-slider', 'iou-value');
+        setupSlider('max-det-slider', 'max-det-value');
+        setupSlider('chain-timeout-slider', 'chain-timeout-value', updateChainSettings);
+        setupSlider('chain-pause-slider', 'chain-pause-value', updateChainSettings);
+
+        document.getElementById('apply-classes-btn').addEventListener('click', applyClassSelection);
+        document.getElementById('counter-mode-cb').addEventListener('change', updateSettings);
+        document.getElementById('reset-counters-btn').addEventListener('click', resetCounters);
+        document.getElementById('save-images-cb').addEventListener('change', updateSettings);
+        document.getElementById('dataset-capture-cb').addEventListener('change', updateSettings);
+        document.getElementById('create-project-btn').addEventListener('click', showCreateProject);
+        document.getElementById('save-project-btn').addEventListener('click', createProject);
+        document.getElementById('cancel-project-btn').addEventListener('click', hideCreateProject);
+
+        document.getElementById('start-chain-btn').addEventListener('click', startChain);
+        document.getElementById('stop-chain-btn').addEventListener('click', stopChain);
+        document.getElementById('reset-chain-btn').addEventListener('click', resetChain);
+        document.getElementById('add-step-btn').addEventListener('click', showStepModal);
+        document.getElementById('save-step-btn').addEventListener('click', saveStep);
+        document.getElementById('cancel-step-btn').addEventListener('click', hideStepModal);
+        document.getElementById('chain-auto-advance-cb').addEventListener('change', updateChainSettings);
+        document.getElementById('save-chain-btn').addEventListener('click', showSaveChainModal);
+        document.getElementById('load-chain-btn').addEventListener('click', showLoadChainModal);
+    }
+
+    function setupSlider(sliderId, valueId, callback) {
+        const slider = document.getElementById(sliderId);
+        const valueDisplay = document.getElementById(valueId);
+
+        slider.addEventListener('input', function() {
+            valueDisplay.textContent = this.value;
+            if (callback) {
+                callback();
+            } else {
+                updateSettings();
+            }
+        });
+    }
+
+    async function loadCameras() {
+        try {
+            const response = await fetch('/api/bilt/cameras');
+            const data = await response.json();
+            const cameras = data.cameras || [];
+
+            const select = document.getElementById('camera-select');
+            select.innerHTML = '<option value="">カメラを選択...</option>';
+
+            cameras.forEach(camera => {
+                const option = document.createElement('option');
+                option.value = camera.index;
+                option.textContent = camera.name || `Camera ${camera.index}`;
+                select.appendChild(option);
+            });
+        } catch (error) {
+            console.error('カメラのロード中にエラーが発生しました:', error);
+        }
+    }
+
+    async function loadModels() {
+        try {
+            const response = await fetch('/api/bilt/models');
+            const data = await response.json();
+            const models = data.models || [];
+
+            const select = document.getElementById('model-select');
+            select.innerHTML = '<option value="">モデルを選択... (.pth)</option>';
+
+            models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model.name;
+                option.textContent = `${model.name} (${model.size_mb} MB)`;
+                select.appendChild(option);
+            });
+        } catch (error) {
+            console.error('モデルのロード中にエラーが発生しました:', error);
+        }
+    }
+
+    async function loadProjects() {
+        try {
+            const response = await fetch('/api/projects');
+            const projects = await response.json();
+
+            const select = document.getElementById('project-select');
+            select.innerHTML = '<option value="">プロジェクトを選択...</option>';
+
+            projects.forEach(project => {
+                const option = document.createElement('option');
+                option.value = project;
+                option.textContent = project;
+                select.appendChild(option);
+            });
+        } catch (error) {
+            console.error('プロジェクトのロード中にエラーが発生しました:', error);
+        }
+    }
+
+    async function selectCamera() {
+        const cameraIndex = document.getElementById('camera-select').value;
+        if (!cameraIndex) {
+            alert('カメラを選択してください');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/bilt/camera/select', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ camera_index: parseInt(cameraIndex) })
+            });
+
+            const result = await response.json();
+            updateStatusIndicator('camera', result.success);
+        } catch (error) {
+            console.error('カメラ選択中にエラーが発生しました:', error);
+            updateStatusIndicator('camera', false);
+        }
+    }
+
+    async function loadModel() {
+        const modelName = document.getElementById('model-select').value;
+        if (!modelName) {
+            alert('モデルを選択してください');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/bilt/model/load', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model_name: modelName })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                currentClasses = (result.model_info && result.model_info.classes) || [];
+                updateClassesList();
+                updateStatusIndicator('model', true);
+            } else {
+                updateStatusIndicator('model', false);
+                alert('モデルのロード中にエラーが発生しました: ' + (result.error || result.message || '不明なエラー'));
+            }
+        } catch (error) {
+            console.error('モデルのロード中にエラーが発生しました:', error);
+            updateStatusIndicator('model', false);
+        }
+    }
+
+    function updateStatusIndicator(type, active) {
+        const dot = document.getElementById(`${type}-status-dot`);
+        const text = document.getElementById(`${type}-status-text`);
+
+        if (active) {
+            dot.classList.add('active');
+            if (type === 'camera') text.textContent = 'カメラ接続済み';
+            if (type === 'model') text.textContent = 'モデルロード済み';
+            if (type === 'detection') text.textContent = '検出中';
+        } else {
+            dot.classList.remove('active');
+            if (type === 'camera') text.textContent = 'カメラ未接続';
+            if (type === 'model') text.textContent = 'モデル未ロード';
+            if (type === 'detection') text.textContent = '検出停止中';
+        }
+    }
+
+    function updateClassesList() {
+        const classesList = document.getElementById('classes-list');
+        classesList.innerHTML = '';
+
+        currentClasses.forEach((className, index) => {
+            const classItem = document.createElement('div');
+            classItem.className = 'class-item';
+
+            classItem.innerHTML = `
+                <input type="checkbox" class="checkbox" id="class-${index}" value="${index}">
+                <label for="class-${index}" class="class-name">${className}</label>
+                <input type="number" class="class-count-input" id="count-${index}"
+                       min="0" max="100" value="0" title="Max objects (0 = unlimited)">
+            `;
+
+            classesList.appendChild(classItem);
+        });
+    }
+
+    async function applyClassSelection() {
+        selectedClasses = [];
+        classCountLimits = {};
+        classOrder = [];
+
+        const checkboxes = document.querySelectorAll('.class-item .checkbox:checked');
+        checkboxes.forEach(checkbox => {
+            const classIndex = parseInt(checkbox.value);
+            const className = currentClasses[classIndex];
+            const countInput = document.getElementById(`count-${classIndex}`);
+
+            selectedClasses.push(classIndex);
+            if (countInput && countInput.value > 0) {
+                classCountLimits[className] = parseInt(countInput.value);
+            }
+            classOrder.push(className);
+        });
+
+        await updateSettings();
+    }
+
+    async function updateSettings() {
+        const settings = {
+            conf: parseFloat(document.getElementById('conf-slider').value),
+            iou: parseFloat(document.getElementById('iou-slider').value),
+            max_det: parseInt(document.getElementById('max-det-slider').value),
+            classes: selectedClasses.length > 0 ? selectedClasses : null,
+            class_counts: classCountLimits,
+            class_order: classOrder,
+            counter_mode: document.getElementById('counter-mode-cb').checked,
+            save_images: document.getElementById('save-images-cb').checked,
+            dataset_capture: document.getElementById('dataset-capture-cb').checked,
+            project_folder: document.getElementById('project-select').value
+        };
+
+        try {
+            await fetch('/api/bilt/detection/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settings)
+            });
+        } catch (error) {
+            console.error('設定の更新中にエラーが発生しました:', error);
+        }
+    }
+
+    async function startDetection() {
+        try {
+            await fetch('/api/bilt/detection/start', { method: 'POST' });
+            document.getElementById('start-detection-btn').disabled = true;
+            document.getElementById('stop-detection-btn').disabled = false;
+            updateStatusIndicator('detection', true);
+
+            if (!counterInterval) {
+                counterInterval = setInterval(updateCounters, 2000);
+                updateCounters();
+            }
+        } catch (error) {
+            console.error('検出の開始中にエラーが発生しました:', error);
+        }
+    }
+
+    async function stopDetection() {
+        try {
+            await fetch('/api/bilt/detection/stop', { method: 'POST' });
+            document.getElementById('start-detection-btn').disabled = false;
+            document.getElementById('stop-detection-btn').disabled = true;
+            updateStatusIndicator('detection', false);
+
+            if (counterInterval) {
+                clearInterval(counterInterval);
+                counterInterval = null;
+            }
+        } catch (error) {
+            console.error('検出の停止中にエラーが発生しました:', error);
+        }
+    }
+
+    async function updateCounters() {
+        try {
+            const response = await fetch('/api/bilt/counters');
+            const raw = await response.json();
+            const counters = raw.counters !== undefined ? raw.counters : raw;
+
+            const countersList = document.getElementById('counters-list');
+
+            if (Object.keys(counters).length === 0) {
+                countersList.innerHTML = '<div class="empty-state">検出結果がありません</div>';
+            } else {
+                countersList.innerHTML = '';
+                Object.entries(counters).forEach(([className, count]) => {
+                    const counterItem = document.createElement('div');
+                    counterItem.className = 'counter-item';
+                    counterItem.innerHTML = `
+                        <span class="counter-label">${className}</span>
+                        <span class="counter-value">${count}</span>
+                    `;
+                    countersList.appendChild(counterItem);
+                });
+            }
+        } catch (error) {
+            console.error('カウンターの更新中にエラーが発生しました:', error);
+        }
+    }
+
+    async function resetCounters() {
+        try {
+            await fetch('/api/bilt/counters/reset', { method: 'POST' });
+            updateCounters();
+        } catch (error) {
+            console.error('カウンターのリセット中にエラーが発生しました:', error);
+        }
+    }
+
+    function showCreateProject() {
+        document.getElementById('create-project-form').classList.remove('hidden');
+        document.getElementById('create-project-btn').style.display = 'none';
+    }
+
+    function hideCreateProject() {
+        document.getElementById('create-project-form').classList.add('hidden');
+        document.getElementById('create-project-btn').style.display = 'inline-flex';
+        document.getElementById('project-name-input').value = '';
+    }
+
+    async function createProject() {
+        const projectName = document.getElementById('project-name-input').value.trim();
+        if (!projectName) {
+            alert('プロジェクト名を入力してください');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/create_project', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ project_name: projectName })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                await loadProjects();
+                document.getElementById('project-select').value = projectName;
+                hideCreateProject();
+                await updateSettings();
+            } else {
+                alert('プロジェクト作成エラー: ' + result.error);
+            }
+        } catch (error) {
+            console.error('プロジェクト作成中にエラーが発生しました:', error);
+        }
+    }
+
+    async function startChain() {
+        try {
+            const response = await fetch('/api/bilt/chain/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'start' })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                updateChainButtons(true);
+                if (!chainStatusInterval) {
+                    chainStatusInterval = setInterval(updateChainStatus, 1000);
+                }
+            }
+        } catch (error) {
+            console.error('チェーンの開始中にエラーが発生しました:', error);
+        }
+    }
+
+    async function stopChain() {
+        try {
+            const response = await fetch('/api/bilt/chain/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'stop' })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                updateChainButtons(false);
+                if (chainStatusInterval) {
+                    clearInterval(chainStatusInterval);
+                    chainStatusInterval = null;
+                }
+                document.getElementById('chain-status-text').innerHTML = 'Chain inactive';
+                document.getElementById('chain-progress').innerHTML = '';
+            }
+        } catch (error) {
+            console.error('チェーンの停止中にエラーが発生しました:', error);
+        }
+    }
+
+    async function resetChain() {
+        try {
+            const response = await fetch('/api/bilt/chain/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'reset' })
+            });
+            const result = await response.json();
+            if (result.success) {
+                updateChainButtons(false);
+                updateChainStatus();
+            }
+        } catch (error) {
+            console.error('チェーンのリセット中にエラーが発生しました:', error);
+        }
+    }
+
+    function updateChainButtons(active) {
+        const startBtn = document.getElementById('start-chain-btn');
+        const stopBtn = document.getElementById('stop-chain-btn');
+
+        if (active) {
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+        } else {
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+        }
+    }
+
+    async function updateChainSettings() {
+        const settings = {
+            chain_timeout: parseFloat(document.getElementById('chain-timeout-slider').value),
+            chain_auto_advance: document.getElementById('chain-auto-advance-cb').checked,
+            chain_pause_time: parseFloat(document.getElementById('chain-pause-slider').value),
+            chain_steps: chainSteps
+        };
+
+        try {
+            await fetch('/api/bilt/chain/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settings)
+            });
+        } catch (error) {
+            console.error('チェーン設定の更新中にエラーが発生しました:', error);
+        }
+    }
+
+    async function updateChainStatus() {
+        try {
+            const response = await fetch('/api/bilt/chain/status');
+            const data = await response.json();
+            // BILT returns {success, status: {...}}
+            chainStatus = data.status || data;
+
+            updateChainStatusDisplay();
+            updateChainButtons(chainStatus.active);
+
+        } catch (error) {
+            console.error('チェーンステータスの更新中にエラーが発生しました:', error);
+        }
+    }
+
+    function playSkipAlert() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        const now = audioCtx.currentTime;
+
+        for (let i = 0; i < 3; i++) {
+            const startTime = now + (i * 1.2);
+            const duration = 0.8;
+            const osc1 = audioCtx.createOscillator();
+            osc1.type = "sawtooth";
+            osc1.frequency.value = 250;
+            const gain1 = audioCtx.createGain();
+            gain1.gain.setValueAtTime(0.35, startTime);
+            gain1.gain.setValueAtTime(0.35, startTime + duration - 0.1);
+            gain1.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+            osc1.connect(gain1).connect(audioCtx.destination);
+            osc1.start(startTime);
+            osc1.stop(startTime + duration);
+            const osc2 = audioCtx.createOscillator();
+            osc2.type = "sawtooth";
+            osc2.frequency.value = 150;
+            const gain2 = audioCtx.createGain();
+            gain2.gain.setValueAtTime(0.3, startTime);
+            gain2.gain.setValueAtTime(0.3, startTime + duration - 0.1);
+            gain2.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+            osc2.connect(gain2).connect(audioCtx.destination);
+            osc2.start(startTime);
+            osc2.stop(startTime + duration);
+            const osc3 = audioCtx.createOscillator();
+            osc3.type = "triangle";
+            osc3.frequency.value = 200;
+            const gain3 = audioCtx.createGain();
+            gain3.gain.setValueAtTime(0.25, startTime);
+            gain3.gain.setValueAtTime(0.25, startTime + duration - 0.1);
+            gain3.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+            osc3.connect(gain3).connect(audioCtx.destination);
+            osc3.start(startTime);
+            osc3.stop(startTime + duration);
+        }
+    }
+
+    function updateChainStatusDisplay() {
+        const statusDiv = document.getElementById('chain-status-text');
+        const progressDiv = document.getElementById('chain-progress');
+
+        if (!window.chainTracker) {
+            window.chainTracker = {
+                lastStep: 0,
+                lastResult: null,
+                lastCycle: 0,
+                lastSkipTimestamp: 0,
+                lastSkippedClass: null,
+                skipAcknowledged: false
+            };
+        }
+
+        if (!chainStatus.active) {
+            statusDiv.innerHTML = 'Chain inactive';
+            progressDiv.innerHTML = '';
+            window.chainTracker = { lastStep: 0, lastResult: null, lastCycle: 0, lastSkipTimestamp: 0, lastSkippedClass: null, skipAcknowledged: false };
+            return;
+        }
+
+        const now = Date.now();
+        const stepChanged = chainStatus.current_step !== window.chainTracker.lastStep;
+        const resultChanged = chainStatus.last_result !== window.chainTracker.lastResult;
+        const isCurrentlySkipped = chainStatus.last_result === 'timeout' || chainStatus.last_result === 'skipped';
+
+        const skippedClassChanged = chainStatus.skipped_class_name !== window.chainTracker.lastSkippedClass && chainStatus.skipped_class_name !== null;
+
+        if (chainStatus.skipped_class_name) {
+            window.chainTracker.lastSkippedClass = chainStatus.skipped_class_name;
+        }
+
+        if (window.chainTracker.lastResult === 'skipped' && chainStatus.last_result === null) {
+            window.chainTracker.skipAcknowledged = false;
+        }
+
+        if (stepChanged) {
+            window.chainTracker.skipAcknowledged = false;
+        }
+
+        const shouldAlert = !window.chainTracker.skipAcknowledged &&
+            ((resultChanged && isCurrentlySkipped) || (skippedClassChanged && isCurrentlySkipped)) &&
+            (now - window.chainTracker.lastSkipTimestamp > 1000);
+
+        if (shouldAlert) {
+            const skippedStepIndex = chainStatus.current_step;
+            const skippedStepName = chainSteps[skippedStepIndex]?.name || 'Unknown';
+            const skippedClassName = chainStatus.skipped_class_name || 'Unknown Object';
+
+            console.log(`ステップ ${skippedStepIndex + 1}でアラートが発生: ${skippedStepName}, クラス: ${skippedClassName}`);
+            playSkipAlert();
+            showSkipMessage(skippedStepIndex + 1, skippedStepName, skippedClassName);
+            window.chainTracker.lastSkipTimestamp = now;
+            window.chainTracker.skipAcknowledged = true;
+        }
+
+        window.chainTracker.lastStep = chainStatus.current_step;
+        window.chainTracker.lastResult = chainStatus.last_result;
+        window.chainTracker.lastCycle = chainStatus.completed_cycles;
+
+        if (chainStatus.cycle_pause) {
+            statusDiv.innerHTML = `
+                サイクル一時停止 - 次のサイクルまで: ${chainStatus.pause_remaining.toFixed(1)}s<br>
+                完了サイクル: ${chainStatus.completed_cycles}
+            `;
+            progressDiv.innerHTML = `
+                <div class="dc-progress-bar">
+                    <div class="progress-fill" style="width: 100%; background: #f59e0b;"></div>
+                </div>
+            `;
+        } else {
+            const currentStep = chainStatus.current_step + 1;
+            const totalSteps = chainStatus.total_steps;
+            const cycles = chainStatus.completed_cycles;
+            const remainingTime = chainStatus.remaining_time;
+
+            statusDiv.innerHTML = `
+                ステップ: ${currentStep}/${totalSteps} | サイクル: ${cycles}<br>
+                時間: ${remainingTime.toFixed(1)}s | 最終結果: ${chainStatus.last_result || 'なし'}
+            `;
+
+            const progress = totalSteps > 0 ? (currentStep - 1) / totalSteps * 100 : 0;
+            progressDiv.innerHTML = `
+                <div class="dc-progress-bar">
+                    <div class="progress-fill" style="width: ${progress}%"></div>
+                </div>
+            `;
+        }
+    }
+
+    function showSkipMessage(stepNumber, stepName, detectedClassName) {
+        const existing = document.getElementById('skip-alert-modal');
+        if (existing) existing.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'skip-alert-modal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            animation: fadeIn 0.3s ease;
+        `;
+
+        modal.innerHTML = `
+            <div style="
+                background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+                color: white;
+                padding: 50px 60px;
+                border-radius: 20px;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+                text-align: center;
+                max-width: 500px;
+                animation: scaleInShake 0.5s ease;
+                border: 5px solid #ff0000;
+            ">
+                <div style="font-size: 80px; margin-bottom: 20px; animation: pulse 1s infinite;">⚠️</div>
+                <h2 style="margin: 0 0 15px 0; font-size: 36px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">ステップをスキップしました!</h2>
+                <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 10px; margin-bottom: 15px;">
+                    <p style="margin: 0 0 10px 0; font-size: 20px; font-weight: bold;">
+                        ステップ ${stepNumber}: ${stepName}
+                    </p>
+                    <p style="margin: 0; font-size: 18px; color: #ffeb3b; font-weight: bold;">
+                        検出されたクラス: ${detectedClassName}
+                    </p>
+                </div>
+                <p style="margin: 0 0 25px 0; font-size: 18px; opacity: 0.95;">
+                    正しいステップより前にオブジェクトが検出されました!
+                </p>
+                <button onclick="closeSkipMessage()" style="
+                    background: white;
+                    color: #ff6b6b;
+                    border: none;
+                    padding: 15px 40px;
+                    border-radius: 8px;
+                    font-weight: bold;
+                    cursor: pointer;
+                    font-size: 18px;
+                    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+                    transition: transform 0.2s;
+                " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                    確認
+                </button>
+            </div>
+        `;
+
+        if (!document.getElementById('skip-alert-styles')) {
+            const style = document.createElement('style');
+            style.id = 'skip-alert-styles';
+            style.textContent = `
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                @keyframes fadeOut {
+                    from { opacity: 1; }
+                    to { opacity: 0; }
+                }
+                @keyframes scaleInShake {
+                    0% { transform: scale(0.5) rotate(-5deg); opacity: 0; }
+                    50% { transform: scale(1.05) rotate(2deg); }
+                    75% { transform: scale(0.95) rotate(-1deg); }
+                    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+                }
+                @keyframes pulse {
+                    0%, 100% { transform: scale(1); opacity: 1; }
+                    50% { transform: scale(1.2); opacity: 0.7; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        document.body.appendChild(modal);
+    }
+
+    async function closeSkipMessage() {
+        const modal = document.getElementById('skip-alert-modal');
+        if (modal) {
+            modal.style.animation = 'fadeOut 0.3s ease';
+            setTimeout(() => modal.remove(), 300);
+        }
+
+        try {
+            const response = await fetch('/api/bilt/chain/acknowledge_skip', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const result = await response.json();
+            console.log('スキップが確認されました:', result.message);
+        } catch (error) {
+            console.error('スキップの確認中にエラーが発生しました:', error);
+        }
+    }
+
+    function showStepModal() {
+        if (currentClasses.length === 0) {
+            alert('クラスを表示するには、最初にモデルをロードしてください');
+            return;
+        }
+
+        updateStepClassesList();
+        document.getElementById('step-modal').classList.remove('hidden');
+    }
+
+    function hideStepModal() {
+        document.getElementById('step-modal').classList.add('hidden');
+        document.getElementById('step-name-input').value = '';
+    }
+
+    function updateStepClassesList() {
+        const classesList = document.getElementById('step-classes-list');
+        classesList.innerHTML = '';
+
+        currentClasses.forEach((className, index) => {
+            const classItem = document.createElement('div');
+            classItem.className = 'class-item';
+            classItem.innerHTML = `
+                <input type="checkbox" class="checkbox" id="step-class-${index}" value="${className}">
+                <label for="step-class-${index}" class="class-name">${className}</label>
+                <input type="number" class="class-count-input" id="step-count-${index}"
+                       min="1" max="10" value="1" placeholder="Count">
+            `;
+            classesList.appendChild(classItem);
+        });
+    }
+
+    function saveStep() {
+        const stepName = document.getElementById('step-name-input').value.trim();
+        if (!stepName) {
+            alert('ステップ名を入力してください');
+            return;
+        }
+
+        const stepClasses = {};
+        const checkboxes = document.querySelectorAll('#step-classes-list input[type="checkbox"]:checked');
+
+        if (checkboxes.length === 0) {
+            alert('このステップには少なくとも1つのクラスを選択してください');
+            return;
+        }
+
+        checkboxes.forEach(checkbox => {
+            const className = checkbox.value;
+            const index = checkbox.id.split('-')[2];
+            const countInput = document.getElementById(`step-count-${index}`);
+            const count = parseInt(countInput?.value) || 1;
+            stepClasses[className] = count;
+        });
+
+        const step = {
+            name: stepName,
+            classes: stepClasses
+        };
+
+        chainSteps.push(step);
+        updateChainStepsList();
+        updateChainSettings();
+        hideStepModal();
+    }
+
+    function updateChainStepsList() {
+        const stepsList = document.getElementById('chain-steps-list');
+
+        if (chainSteps.length === 0) {
+            stepsList.innerHTML = '<p>ステップが設定されていません</p>';
+            return;
+        }
+
+        stepsList.innerHTML = '';
+        chainSteps.forEach((step, index) => {
+            const stepDiv = document.createElement('div');
+            stepDiv.className = 'chain-step';
+
+            const classesText = Object.entries(step.classes)
+                .map(([name, count]) => `${name}(${count})`)
+                .join(', ');
+
+            stepDiv.innerHTML = `
+                <div class="chain-step-header">
+                    <div class="chain-step-name">${index + 1}. ${step.name}</div>
+                    <button class="step-delete-btn" onclick="deleteStep(${index})">削除</button>
+                </div>
+                <div class="chain-step-classes">${classesText}</div>
+            `;
+
+            stepsList.appendChild(stepDiv);
+        });
+    }
+
+    function deleteStep(index) {
+        if (confirm('このステップを削除してもよろしいですか？')) {
+            chainSteps.splice(index, 1);
+            updateChainStepsList();
+            updateChainSettings();
+        }
+    }
+
+    async function showSaveChainModal() {
+        if (chainSteps.length === 0) {
+            alert('保存するためのステップがありません');
+            return;
+        }
+
+        const chainName = prompt('チェーン名を入力してください:');
+        if (!chainName) return;
+
+        const modelName = document.getElementById('model-select').value || 'Unknown';
+
+        try {
+            const response = await fetch('/api/bilt/chains/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chain_name: chainName,
+                    model_name: modelName
+                })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                alert(result.message);
+            } else {
+                alert('チェーンの保存中にエラーが発生しました: ' + result.error);
+            }
+        } catch (error) {
+            console.error('チェーンの保存中にエラーが発生しました:', error);
+            alert('チェーンの保存中にエラーが発生しました');
+        }
+    }
+
+    async function showLoadChainModal() {
+        try {
+            const response = await fetch('/api/bilt/chains/saved');
+            const chains = await response.json();
+
+            if (chains.length === 0) {
+                alert('保存されたチェーンが見つかりません');
+                return;
+            }
+
+            const modalHTML = `
+                <div id="chain-load-modal" class="dc-modal">
+                    <div class="dc-modal-content">
+                        <div class="dc-modal-header">保存されたチェーンをロード</div>
+                        <div style="max-height: 300px; overflow-y: auto;">
+                            ${chains.map(chain => `
+                                <div class="chain-list-item">
+                                    <div class="chain-info">
+                                        <div class="chain-name">${chain.name}</div>
+                                        <div class="chain-details">モデル: ${chain.model_name} | ステップ: ${chain.steps}</div>
+                                    </div>
+                                    <div class="chain-actions">
+                                        <button class="chain-action-btn chain-load-btn" onclick="loadChainFromFile('${chain.filename}')">ロード</button>
+                                        <button class="chain-action-btn chain-delete-btn" onclick="deleteChainFile('${chain.filename}')">削除</button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="dc-modal-footer">
+                            <button onclick="closeLoadChainModal()" class="dc-btn dc-btn-secondary">閉じる</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+        } catch (error) {
+            console.error('チェーンリストの読み込み中にエラーが発生しました:', error);
+            alert('チェーンリストの読み込み中にエラーが発生しました');
+        }
+    }
+
+    async function loadChainFromFile(chainName) {
+        try {
+            const response = await fetch('/api/bilt/chains/load', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chain_name: chainName })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                chainSteps = result.chain_data.chain_steps;
+                document.getElementById('chain-timeout-slider').value = result.chain_data.chain_timeout;
+                document.getElementById('chain-timeout-value').textContent = result.chain_data.chain_timeout;
+                document.getElementById('chain-auto-advance-cb').checked = result.chain_data.chain_auto_advance;
+
+                updateChainStepsList();
+                updateChainSettings();
+                closeLoadChainModal();
+                alert(result.message);
+            } else {
+                closeLoadChainModal();
+                alert('チェーンのロード中にエラーが発生しました: ' + result.error);
+            }
+        } catch (error) {
+            console.error('チェーンのロード中にエラーが発生しました:', error);
+            alert('チェーンのロード中にエラーが発生しました');
+        }
+    }
+
+    async function deleteChainFile(chainName) {
+        if (!confirm('本当にこのチェーンを削除しますか？')) return;
+
+        try {
+            const response = await fetch('/api/bilt/chains/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chain_name: chainName })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                closeLoadChainModal();
+                alert(result.message);
+            } else {
+                alert('チェーンの削除中にエラーが発生しました: ' + result.error);
+            }
+        } catch (error) {
+            console.error('チェーンの削除中にエラーが発生しました:', error);
+            alert('チェーンの削除中にエラーが発生しました');
+        }
+    }
+
+    function closeLoadChainModal() {
+        const modal = document.getElementById('chain-load-modal');
+        if (modal) {
+            modal.remove();
+        }
+    }
+
+    // ── Kanji ラベル Canvas オーバーレイ ──────────────────────────────────────────
+
+    let _labelOverlayInterval = null;
+
+    function startLabelOverlay() {
+        const canvas = document.getElementById('label-overlay');
+        if (!canvas) return;
+        if (_labelOverlayInterval) clearInterval(_labelOverlayInterval);
+        _labelOverlayInterval = setInterval(async () => {
+            try {
+                const r = await fetch('/api/bilt/detections/latest');
+                const data = await r.json();
+                if (!data.success || !data.frame_w || !data.frame_h) {
+                    clearCanvas(canvas);
+                    return;
+                }
+                drawLabelOverlay(canvas, data.detections, data.frame_w, data.frame_h, true);
+            } catch (e) { /* silently ignore */ }
+        }, 120);
+    }
+
+    function clearCanvas(canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function drawLabelOverlay(canvas, detections, frameW, frameH, drawBoxes) {
+        // canvasのサイズを親要素に合わせる
+        const container = canvas.parentElement;
+        if (!container) return;
+        const imgEl = document.getElementById('video-stream');
+        if (!imgEl) return;
+
+        const dispW = imgEl.clientWidth;
+        const dispH = imgEl.clientHeight;
+        if (dispW === 0 || dispH === 0) return;
+
+        // object-fit:contain で実際に表示される領域を計算
+        const frameAspect = frameW / frameH;
+        const dispAspect  = dispW / dispH;
+        let renderW, renderH, offsetX, offsetY;
+        if (frameAspect > dispAspect) {
+            renderW = dispW;
+            renderH = dispW / frameAspect;
+            offsetX = 0;
+            offsetY = (dispH - renderH) / 2;
+        } else {
+            renderH = dispH;
+            renderW = dispH * frameAspect;
+            offsetX = (dispW - renderW) / 2;
+            offsetY = 0;
+        }
+
+        // Only reset canvas dimensions when they actually change.
+        // Setting canvas.width (even to the same value) clears the canvas and
+        // triggers a layout repaint — that is the root cause of the overlay flash.
+        if (canvas.width !== dispW || canvas.height !== dispH) {
+            canvas.width  = dispW;
+            canvas.height = dispH;
+        }
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, dispW, dispH);
+
+        const scaleX = renderW / frameW;
+        const scaleY = renderH / frameH;
+
+        if (!detections || !detections.length) return;
+
+        ctx.font = 'bold 14px "Noto Sans JP", "IPAGothic", sans-serif';
+        ctx.textBaseline = 'bottom';
+
+        detections.forEach((det, idx) => {
+            const colors = [
+                '#FF6B6B','#4ECDC4','#45B7D1','#96CEB4','#FFEAA7',
+                '#DDA0DD','#98D8C8','#F7DC6F','#BB8FCE','#85C1E9'
+            ];
+            const color = colors[(det.class_id || idx) % colors.length];
+            const label = `${det.class_name || '?'} ${(det.confidence * 100).toFixed(0)}%`;
+
+            let lx, ly;
+            if (det.type === 'segment' && det.polygon && det.polygon.length > 0) {
+                lx = offsetX + det.polygon[0][0] * scaleX;
+                ly = offsetY + det.polygon[0][1] * scaleY;
+            } else if (det.type === 'obb' && det.corners && det.corners.length > 0) {
+                lx = offsetX + det.corners[0][0] * scaleX;
+                ly = offsetY + det.corners[0][1] * scaleY;
+            } else if (det.bbox) {
+                lx = offsetX + det.bbox[0] * scaleX;
+                ly = offsetY + det.bbox[1] * scaleY;
+            } else {
+                return;
+            }
+
+            // Bounding box (drawn on canvas when Python does not draw it,
+            // e.g. BILT mode where the capture thread sends raw frames)
+            if (drawBoxes && det.bbox) {
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.strokeRect(
+                    offsetX + det.bbox[0] * scaleX,
+                    offsetY + det.bbox[1] * scaleY,
+                    (det.bbox[2] - det.bbox[0]) * scaleX,
+                    (det.bbox[3] - det.bbox[1]) * scaleY
+                );
+            }
+
+            // テキスト背景
+            const metrics = ctx.measureText(label);
+            const textH = 16;
+            const pad = 3;
+            const bgY = ly - textH - pad * 2;
+            ctx.fillStyle = 'rgba(0,0,0,0.65)';
+            ctx.fillRect(lx, bgY, metrics.width + pad * 2, textH + pad * 2);
+
+            ctx.fillStyle = color;
+            ctx.fillText(label, lx + pad, ly - pad);
+        });
+    }
+
+    // ── デバイス情報パネル ─────────────────────────────────────────────────────────
+
+    async function loadDeviceInfo() {
+        try {
+            const r = await fetch('/api/device/info');
+            const data = await r.json();
+            renderDeviceInfo(data.info || {});
+        } catch (e) {
+            document.getElementById('device-info-content').innerHTML =
+                '<span style="color:#f87171;">デバイス情報の取得に失敗しました</span>';
+        }
+        // 10秒ごとにGPUメモリを更新
+        setTimeout(loadDeviceInfo, 10000);
+    }
+
+    function renderDeviceInfo(info) {
+        const el = document.getElementById('device-info-content');
+        if (!el) return;
+        const row = (label, val) =>
+            `<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+                <span style="color:#94a3b8;">${label}</span>
+                <span style="color:#e2e8f0;font-weight:500;">${val}</span>
+             </div>`;
+        const mb = v => v != null ? `${v} MB` : '—';
+        const pct = v => v != null ? `${v}%` : '—';
+
+        let html = '';
+        html += row('推論デバイス', `<span style="color:${info.cuda_available ? '#4ade80':'#f87171'};">${info.inference_device || 'cpu'}</span>`);
+        html += row('PyTorch', info.torch_version || '—');
+        html += row('Python', info.python_version || '—');
+        html += row('CPUコア数', info.cpu_count || '—');
+        if (info.cpu_freq_mhz != null) html += row('CPU周波数', `${info.cpu_freq_mhz} MHz`);
+        if (info.cpu_percent != null) {
+            const cpuPct = Math.round(info.cpu_percent);
+            html += row('CPU使用率', pct(cpuPct));
+            html += `<div style="margin:4px 0;background:#1e293b;border-radius:4px;height:6px;">
+                        <div style="width:${cpuPct}%;height:100%;background:${cpuPct>85?'#f87171':'#34d399'};border-radius:4px;"></div>
+                     </div>`;
+        }
+        if (info.model_loaded) {
+            html += row('BILTモデル', `<span style="color:#4ade80;">✓ ${info.model_name || ''}</span>`);
+            html += row('クラス数', info.model_classes != null ? info.model_classes : '—');
+        } else {
+            html += row('BILTモデル', '<span style="color:#94a3b8;">未ロード</span>');
+        }
+        if (info.ram_total_mb != null) {
+            const usedPct = Math.round((info.ram_used_mb / info.ram_total_mb) * 100);
+            html += row('RAM', `${mb(info.ram_used_mb)} / ${mb(info.ram_total_mb)} (${pct(usedPct)})`);
+            html += `<div style="margin:4px 0;background:#1e293b;border-radius:4px;height:6px;">
+                        <div style="width:${usedPct}%;height:100%;background:${usedPct>85?'#f87171':'#38bdf8'};border-radius:4px;"></div>
+                     </div>`;
+        }
+        if (info.gpus && info.gpus.length > 0) {
+            info.gpus.forEach(g => {
+                html += `<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.1);color:#f59e0b;font-weight:600;">GPU ${g.index}: ${g.name}</div>`;
+                html += row('VRAMの合計', mb(g.total_mb));
+                html += row('VRAM使用中', mb(g.allocated_mb));
+                const vramPct = g.total_mb > 0 ? Math.round((g.allocated_mb / g.total_mb) * 100) : 0;
+                html += `<div style="margin:4px 0;background:#1e293b;border-radius:4px;height:6px;">
+                            <div style="width:${vramPct}%;height:100%;background:${vramPct>85?'#f87171':'#a78bfa'};border-radius:4px;"></div>
+                         </div>`;
+                html += row('Compute', g.compute || '—');
+            });
+        } else if (info.cuda_available === false) {
+            html += `<div style="margin-top:6px;color:#f59e0b;font-size:11px;">⚠ CUDAは利用できません（CPU推論）</div>`;
+        }
+        el.innerHTML = html;
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey || e.metaKey) {
+            switch(e.key) {
+                case ' ':
+                    e.preventDefault();
+                    if (chainStatus.active) {
+                        if (document.getElementById('start-chain-btn').disabled) {
+                            stopChain();
+                        } else {
+                            startChain();
+                        }
+                    } else {
+                        const startBtn = document.getElementById('start-detection-btn');
+                        if (!startBtn.disabled) {
+                            startDetection();
+                        } else {
+                            stopDetection();
+                        }
+                    }
+                    break;
+                case 'r':
+                    e.preventDefault();
+                    if (chainStatus.active) {
+                        resetChain();
+                    } else {
+                        resetCounters();
+                    }
+                    break;
+            }
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,40 @@
+# BILT_Workflow_JA Annotation & Detection Tool
+# Minimum version requirements – install with: pip install -r requirements.txt
+# Torch/CUDA: if you need GPU support install torch manually first:
+#   https://pytorch.org/get-started/locally/
+
+# ── Web framework ──────────────────────────────────────────────────────────────
+Flask>=2.3
+Flask-SocketIO>=5.3
+python-socketio>=5.8
+python-engineio>=4.3
+eventlet>=0.33
+Werkzeug>=2.3
+
+# ── Vision & ML ────────────────────────────────────────────────────────────────
+opencv-python>=4.8
+torch>=2.0
+torchvision>=0.15
+numpy>=1.24
+PyYAML>=6.0
+
+# ── BILT (Because I Like Twice) — object detection library ────────────────────
+# BILT is bundled as a sibling repository at ../bilt/ and loaded via sys.path.
+# Its dependencies (torch, torchvision, Pillow) are already pulled in above.
+# If you install BILT as a package instead, uncomment the next line:
+# bilt @ file:///../bilt
+Pillow>=9.0               # PIL used by BILT inferencer
+
+# ── HTTP client (bilt_client / alert widget) ──────────────────────────────────
+requests>=2.28
+
+# ── Desktop launcher (optional — only needed when using launcher.py) ──────────
+# MIT license; uses Edge WebView2 on Windows 10/11 (pre-installed),
+# WKWebView on macOS, WebKit2GTK on Linux.
+# Linux extra: sudo apt install python3-gi gir1.2-webkit2-4.0
+pywebview>=5.0
+
+# ── Raspberry Pi camera module (optional — Raspberry Pi only) ─────────────────
+# Install on the Pi with: sudo apt install -y python3-picamera2
+# Or via pip (Pi OS Bookworm+): pip install picamera2
+# picamera2  # uncomment to add to pip install

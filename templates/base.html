@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}BILT Workflow{% endblock %}</title>
+    <script>/* prevent FOUC */(function(){document.documentElement.setAttribute('data-theme',localStorage.getItem('bilt-theme')||'dark');})();</script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* ── Shared theme tokens (dark default) ── */
+        :root {
+            /* Surfaces */
+            --bg:        #0f1419;
+            --surface:   #1a1f2e;
+            --surface2:  #252d3d;
+            --card-bg:   #1a1f2e;
+            --node-bg:   #1e2535;
+            --log-bg:    #0a0d14;
+            /* Borders */
+            --border:    #2d3748;
+            --border2:   #374151;
+            /* Text */
+            --text:      #e8eaed;
+            --muted:     #9ca3af;
+            /* Accent */
+            --accent:    #3b82f6;
+            --accent-hi: #60a5fa;
+            /* Form */
+            --input-bg:  #0a0d14;
+            /* Nav */
+            --nav-bg:    #111827;
+            /* Canvas grid */
+            --grid-line: rgba(255,255,255,.03);
+            /* Typography */
+            --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
+                         'Noto Sans JP', 'Hiragino Kaku Gothic ProN', sans-serif;
+            --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            /* Radius */
+            --radius-sm: 4px;
+            --radius:    6px;
+            --radius-lg: 10px;
+        }
+        [data-theme="light"] {
+            --bg:        #f0f4f8;
+            --surface:   #ffffff;
+            --surface2:  #f1f5f9;
+            --card-bg:   #ffffff;
+            --node-bg:   #ffffff;
+            --log-bg:    #f8fafc;
+            --border:    #dee2e6;
+            --border2:   #cbd5e1;
+            --text:      #212529;
+            --muted:     #6c757d;
+            --accent:    #0d6efd;
+            --accent-hi: #2563eb;
+            --input-bg:  #ffffff;
+            --nav-bg:    #1e293b;
+            --grid-line: rgba(0,0,0,.06);
+        }
+
+        /* ── Base ── */
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--font-sans);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        /* ── Navbar always uses dark style ── */
+        .navbar { background-color: var(--nav-bg) !important; border-bottom: 1px solid rgba(255,255,255,.08); }
+        .app-tab-active { border-bottom: 3px solid #fff; font-weight: 700; }
+
+        /* ── Dark mode Bootstrap overrides ── */
+        [data-theme="dark"] .card {
+            background-color: var(--card-bg);
+            border-color: var(--border);
+            color: var(--text);
+        }
+        [data-theme="dark"] .card-header,
+        [data-theme="dark"] .card-footer {
+            background-color: var(--surface2);
+            border-color: var(--border);
+            color: var(--text);
+        }
+        [data-theme="dark"] .modal-content {
+            background-color: var(--surface);
+            border-color: var(--border);
+            color: var(--text);
+        }
+        [data-theme="dark"] .modal-header,
+        [data-theme="dark"] .modal-footer { border-color: var(--border); }
+        [data-theme="dark"] .form-control,
+        [data-theme="dark"] .form-select {
+            background-color: var(--input-bg);
+            border-color: var(--border);
+            color: var(--text);
+        }
+        [data-theme="dark"] .form-control:focus,
+        [data-theme="dark"] .form-select:focus {
+            background-color: var(--input-bg);
+            border-color: var(--accent);
+            color: var(--text);
+            box-shadow: 0 0 0 .2rem rgba(59,130,246,.25);
+        }
+        [data-theme="dark"] .form-control::placeholder { color: var(--muted); }
+        [data-theme="dark"] .form-select option { background: var(--surface); color: var(--text); }
+        [data-theme="dark"] .input-group-text {
+            background-color: var(--surface2);
+            border-color: var(--border);
+            color: var(--text);
+        }
+        [data-theme="dark"] .alert { border-color: var(--border); color: var(--text); }
+        [data-theme="dark"] .alert-info  { background-color: rgba(59,130,246,.12); border-color: rgba(59,130,246,.35); }
+        [data-theme="dark"] .alert-warning{ background-color: rgba(245,158,11,.12); border-color: rgba(245,158,11,.35); }
+        [data-theme="dark"] .alert-danger { background-color: rgba(239,68,68,.12);  border-color: rgba(239,68,68,.35);  }
+        [data-theme="dark"] .alert-success{ background-color: rgba(34,197,94,.12);  border-color: rgba(34,197,94,.35);  }
+        [data-theme="dark"] .btn-close { filter: invert(1) grayscale(1) brightness(1.5); }
+        [data-theme="dark"] .text-muted { color: var(--muted) !important; }
+        [data-theme="dark"] .border { border-color: var(--border) !important; }
+        [data-theme="dark"] .badge.bg-secondary { background-color: var(--surface2) !important; color: var(--text) !important; }
+        [data-theme="dark"] .list-group-item {
+            background-color: var(--card-bg);
+            border-color: var(--border);
+            color: var(--text);
+        }
+        [data-theme="dark"] .table { color: var(--text); border-color: var(--border); }
+        [data-theme="dark"] .table td,
+        [data-theme="dark"] .table th { border-color: var(--border); }
+        [data-theme="dark"] .dropdown-menu {
+            background-color: var(--surface);
+            border-color: var(--border);
+        }
+        [data-theme="dark"] .dropdown-item { color: var(--text); }
+        [data-theme="dark"] .dropdown-item:hover { background-color: var(--surface2); }
+        [data-theme="dark"] .nav-tabs { border-color: var(--border); }
+        [data-theme="dark"] .nav-tabs .nav-link { color: var(--muted); border-color: transparent; }
+        [data-theme="dark"] .nav-tabs .nav-link.active {
+            background: var(--card-bg); border-color: var(--border) var(--border) var(--card-bg); color: var(--text);
+        }
+        [data-theme="dark"] .btn-outline-secondary { color: var(--muted); border-color: var(--border); }
+        [data-theme="dark"] .btn-outline-secondary:hover { background: var(--surface2); color: var(--text); }
+        [data-theme="dark"] .progress { background-color: var(--surface2); }
+
+        /* ── Light mode: fix Bootstrap .bg-light / .bg-dark usage ── */
+        [data-theme="dark"] .bg-light { background-color: var(--surface2) !important; color: var(--text) !important; }
+        [data-theme="dark"] code, [data-theme="dark"] pre { background: var(--log-bg); color: #f59e0b; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+        [data-theme="light"] code, [data-theme="light"] pre { background: var(--surface2); color: #7c3aed; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+
+        /* ── Shared scrollbar ── */
+        ::-webkit-scrollbar             { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track       { background: var(--bg); }
+        ::-webkit-scrollbar-thumb       { background: var(--border2); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+        /* ── Shared panel widget (used in detection / annotation pages) ── */
+        .bilt-panel { border-bottom: 1px solid var(--border); padding: 0; }
+        .bilt-panel-header {
+            font-size: 13px; font-weight: 600; color: var(--accent-hi);
+            text-transform: uppercase; letter-spacing: .5px;
+            padding: 14px 18px; display: flex; justify-content: space-between;
+            align-items: center; cursor: pointer; user-select: none;
+        }
+        .bilt-panel-header:hover { background: rgba(96,165,250,.08); }
+        .bilt-panel-toggle { font-size: 11px; transition: transform .25s; }
+        .bilt-panel-toggle.collapsed { transform: rotate(-90deg); }
+        .bilt-panel-content { padding: 0 18px 16px; overflow-y: auto; }
+        .bilt-panel-content.collapsed { display: none; }
+
+        /* ── Shared status-dot ── */
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; display: inline-block; flex-shrink: 0; }
+        .status-dot.active { background: #10b981; box-shadow: 0 0 8px rgba(16,185,129,.5); }
+
+        /* ── Workspace / annotation layout ── */
+        .sidebar {height: 100%; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+        .annotation-canvas { border: 2px solid var(--border); cursor: crosshair; }
+        .camera-feed { max-width: 100%; height: auto; border: 2px solid var(--border); }
+        .image-thumbnail { width: 100px; height: 75px; object-fit: cover; cursor: pointer; }
+        .image-item { margin-bottom: 10px; }
+        .image-item .labeled   { border: 2px solid #28a745 !important; transition: border-color .3s; }
+        .image-item .unlabeled { border: 2px solid #dc3545 !important; transition: border-color .3s; }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body>
+<nav class="navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="{{ url_for('index') }}">
+            <i class="fas fa-eye"></i>
+            <span id="navBrandLabel">BILT Workflow</span>
+        </a>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            {% if current_project %}
+                <span class="navbar-text me-2 small">プロジェクト: <strong>{{ current_project.name }}</strong></span>
+            {% endif %}
+            <a href="{{ url_for('projects') }}"
+               class="btn btn-sm btn-outline-light {% if request.endpoint in ('projects','workspace','create_project','load_project') %}app-tab-active{% endif %}">
+                <i class="fas fa-tag"></i> ラベリング
+            </a>
+            <a href="{{ url_for('detection_index') }}"
+               class="btn btn-sm btn-outline-success {% if request.endpoint == 'detection_index' %}app-tab-active{% endif %}">
+                <i class="fas fa-camera"></i> 物体検知
+            </a>
+            <a href="{{ url_for('detection_workflow') }}"
+               class="btn btn-sm btn-outline-warning {% if request.endpoint == 'detection_workflow' %}app-tab-active{% endif %}">
+                <i class="fas fa-project-diagram"></i> ワークフロー
+            </a>
+
+            <!-- Help dropdown -->
+            <div class="dropdown">
+                <button class="btn btn-sm btn-outline-info dropdown-toggle" type="button"
+                        data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fas fa-question-circle"></i> ヘルプ
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                        <a class="dropdown-item" href="{{ url_for('help_page') }}" target="_blank">
+                            <i class="fas fa-book"></i> アプリケーションガイド
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="{{ url_for('help_page') }}#bilt" target="_blank">
+                            <i class="fas fa-brain"></i> BILT の使い方
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <a class="dropdown-item" href="https://github.com/Rikiza89/bilt" target="_blank">
+                            <i class="fab fa-github"></i> BILT GitHub
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
+            <button id="themeToggle" class="btn btn-sm btn-outline-light" title="Toggle light/dark mode">
+                <i class="fas fa-sun" id="themeIcon"></i>
+            </button>
+        </div>
+    </div>
+</nav>
+
+{% block outer_content %}
+<div class="container-fluid">
+    {% block content %}{% endblock %}
+</div>
+{% endblock %}
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+{% block scripts %}{% endblock %}
+<script>
+(function(){
+    var el = document.documentElement;
+    var icon = document.getElementById('themeIcon');
+    function sync(t){ if(icon) icon.className = t==='dark' ? 'fas fa-sun' : 'fas fa-moon'; }
+    sync(el.getAttribute('data-theme') || 'dark');
+    var btn = document.getElementById('themeToggle');
+    if(btn) btn.addEventListener('click', function(){
+        var next = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        el.setAttribute('data-theme', next);
+        localStorage.setItem('bilt-theme', next);
+        sync(next);
+    });
+})();
+</script>
+</body>
+</html>

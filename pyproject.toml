@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "BILT_Workflow_JA"
+version = "0.2.0"
+description = "BILT (Because I Like Twice) & BILT_Workflow_JA - A PyTorch-based object detection - training application"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "Rikiza89"}
+]
+keywords = ["deep-learning", "object-detection", "pytorch", "computer-vision", "machine-learning"]
+classifiers = [
+    "Development Status :: 1 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "Flask>=2.3",
+    "Flask-SocketIO>=5.3",
+    "python-socketio>=5.8",
+    "python-engineio>=4.3",
+    "eventlet>=0.33",
+    "Werkzeug>=2.3",
+    "opencv-python>=4.8",
+    "torch>=2.0",
+    "torchvision>=0.15",
+    "numpy>=1.24",
+    "PyYAML>=6.0",
+    "Pillow>=9.0 ",
+    "requests>=2.28",
+    "pywebview>=5.0",
+]
+
+
+[project.urls]
+Homepage = "https://github.com/Rikiza89/BILT_Workflow_JA"
+Repository = "https://github.com/Rikiza89/BILT_Workflow_JA"
+Documentation = "https://github.com/Rikiza89/BILT_Workflow_JA"
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311']

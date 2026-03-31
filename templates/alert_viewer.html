@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block title %}Workflow アラートビュアー{% endblock %}
+
+{% block head %}
+<style>
+  /* alert_viewer-specific extras (theme tokens come from base.html) */
+  [data-theme="light"] .av-toast { background: #fff7ed; border-color: var(--accent); }
+  [data-theme="light"] .av-alert-card .meta span { background: var(--surface2); }
+  [data-theme="light"] .av-controls button { background: var(--surface2); color: var(--text); }
+  [data-theme="light"] .av-controls button:hover { border-color: var(--text); }
+
+  .av-status-bar {
+    padding: 8px 20px; background: var(--surface); border-bottom: 1px solid var(--border);
+    font-size: 12px; color: var(--muted); display: flex; gap: 20px;
+  }
+  .av-status-bar span { display: flex; align-items: center; gap: 5px; }
+  .av-status-bar b { color: var(--text); }
+  .av-live-dot {
+    width: 10px; height: 10px; border-radius: 50%; background: #4ade80;
+    box-shadow: 0 0 6px #4ade80; animation: av-pulse 2s infinite; display:inline-block;
+  }
+  [data-theme="light"] .av-live-dot { background:#16a34a; box-shadow:0 0 6px #16a34a; }
+  .av-live-dot.off { background: var(--muted); box-shadow: none; animation: none; }
+  @keyframes av-pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  .av-main { display: grid; grid-template-columns: 1fr 340px; height: calc(100vh - 94px); }
+
+  #av-log { overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .av-alert-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px; animation: av-slide-in .25s ease; border-left: 4px solid var(--accent);
+  }
+  .av-alert-card.new { border-left-color: #4ade80; }
+  [data-theme="light"] .av-alert-card.new { border-left-color: #16a34a; }
+  @keyframes av-slide-in { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:none} }
+  .av-alert-card .ts  { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .av-alert-card .msg { font-weight: 600; font-size: 15px; margin-bottom: 6px; }
+  .av-alert-card .meta { font-size: 11px; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; }
+  .av-alert-card .meta span { background: var(--surface2); border: 1px solid var(--border);
+                               border-radius: 4px; padding: 1px 6px; }
+  .av-snapshot-toggle { margin-top: 8px; }
+  .av-snapshot-toggle button { background: none; border: 1px solid var(--border); color: var(--muted);
+                                border-radius: 4px; padding: 3px 8px; font-size: 11px; cursor: pointer; }
+  .av-snapshot-toggle button:hover { color: var(--text); }
+  .av-snapshot-img { margin-top: 8px; display: none; }
+  .av-snapshot-img img { max-width: 100%; border-radius: 6px; border: 1px solid var(--border); }
+
+  .av-aside {
+    border-left: 1px solid var(--border); background: var(--surface);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .av-aside-title { padding: 12px 16px; font-size: 12px; font-weight: 600;
+                    text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+                    border-bottom: 1px solid var(--border); }
+  #av-toast-area { flex: 1; overflow-y: auto; padding: 10px; display: flex;
+                   flex-direction: column; gap: 8px; }
+
+  .av-toast {
+    background: var(--surface2); border: 1px solid var(--accent); border-radius: 8px;
+    padding: 12px 14px; animation: av-toast-in .3s ease; transition: opacity .5s;
+  }
+  @keyframes av-toast-in { from{opacity:0;transform:scale(.95)} to{opacity:1;transform:none} }
+  .av-toast .t-msg { font-weight: 600; font-size: 14px; color: var(--text); margin-bottom: 4px; }
+  .av-toast .t-ts  { font-size: 11px; color: var(--muted); }
+  .av-toast .t-src { font-size: 11px; color: var(--accent); margin-top: 2px; }
+
+  .av-empty { text-align: center; padding: 40px 20px; color: var(--muted); }
+  .av-empty .icon { font-size: 36px; margin-bottom: 8px; }
+
+  .av-controls { padding: 10px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; }
+  .av-controls button {
+    flex: 1; padding: 6px 0; border-radius: 6px; font-size: 12px;
+    border: 1px solid var(--border); cursor: pointer;
+    background: var(--bg); color: var(--muted);
+  }
+  .av-controls button:hover { color: var(--text); border-color: var(--text); }
+  .av-controls button.danger { border-color: #7f1d1d; color: #f87171; }
+  .av-controls button.danger:hover { background: #7f1d1d22; }
+</style>
+{% endblock %}
+
+{% block outer_content %}
+<div class="av-status-bar">
+  <span><span class="av-live-dot" id="liveDot"></span>&nbsp; ステータス: <b id="statusText">接続中…</b></span>
+  <span>合計受信: <b id="totalCount">0</b></span>
+  <span>最終アラート: <b id="lastTime">—</b></span>
+  <span style="margin-left:auto;font-size:11px;color:var(--muted);">
+    ポーリング <code style="color:#38bdf8">/api/alert_feed</code>
+  </span>
+</div>
+
+<div class="av-main">
+  <div id="av-log">
+    <div class="av-empty" id="emptyLog">
+      <div class="icon">🔔</div>
+      <div>アラートがありません。</div>
+      <div style="margin-top:6px;font-size:12px;">
+        ワークフローの <b>Alert node → HTTP POST</b> をポイント<br>
+        <code style="color:#38bdf8">http://localhost:5000/api/alert_feed</code>
+      </div>
+    </div>
+  </div>
+
+  <aside class="av-aside">
+    <div class="av-aside-title">ライブアラート</div>
+    <div id="av-toast-area">
+      <div class="av-empty" id="emptyToast" style="padding:20px 10px">
+        <div style="font-size:24px">📭</div>
+        <div style="margin-top:6px;font-size:12px">待機中…</div>
+      </div>
+    </div>
+    <div class="av-controls">
+      <button onclick="clearToasts()">アラートクリア</button>
+      <button class="danger" onclick="clearAll()">全てクリア</button>
+    </div>
+  </aside>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let seenCount = 0;
+  let allAlerts = [];
+  const logEl     = document.getElementById('av-log');
+  const toastArea = document.getElementById('av-toast-area');
+  const emptyLog  = document.getElementById('emptyLog');
+  const emptyToast= document.getElementById('emptyToast');
+  const liveDot   = document.getElementById('liveDot');
+  const statusTxt = document.getElementById('statusText');
+  const totalEl   = document.getElementById('totalCount');
+  const lastEl    = document.getElementById('lastTime');
+
+  function fmtTime(iso){ try{ return new Date(iso).toLocaleTimeString(); }catch{ return iso; } }
+  function fmtDate(iso){ try{ return new Date(iso).toLocaleString(); }catch{ return iso; } }
+
+  function makeCard(a, isNew) {
+    const card = document.createElement('div');
+    card.className = 'av-alert-card' + (isNew ? ' new' : '');
+    const snap = a.frame_snapshot || null;
+    card.innerHTML = `
+      <div class="ts">${fmtDate(a.timestamp)}</div>
+      <div class="msg">${esc(a.message || 'Alert')}</div>
+      <div class="meta">
+        <span>source: ${esc(a.source || '?')}</span>
+        ${snap ? '<span>📷 スナップショット</span>' : ''}
+      </div>
+      ${snap ? `
+        <div class="av-snapshot-toggle">
+          <button onclick="toggleSnap(this)">スナップショットを表示</button>
+        </div>
+        <div class="av-snapshot-img">
+          <img src="data:image/jpeg;base64,${snap}" alt="snapshot">
+        </div>` : ''}`;
+    return card;
+  }
+
+  function toggleSnap(btn) {
+    const img = btn.closest('.av-alert-card').querySelector('.av-snapshot-img');
+    if (img.style.display === 'block') {
+      img.style.display = 'none'; btn.textContent = 'スナップショットを表示';
+    } else {
+      img.style.display = 'block'; btn.textContent = 'スナップショットを非表示';
+    }
+  }
+
+  function makeToast(a) {
+    const t = document.createElement('div');
+    t.className = 'av-toast';
+    t.innerHTML = `
+      <div class="t-msg">${esc(a.message || 'Alert')}</div>
+      <div class="t-ts">${fmtTime(a.timestamp)}</div>
+      <div class="t-src">${esc(a.source || 'workflow')}</div>`;
+    return t;
+  }
+
+  function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  async function poll() {
+    try {
+      const r = await fetch('/api/alert_feed?since=' + seenCount);
+      if (!r.ok) throw new Error(r.status);
+      const data = await r.json();
+      const newAlerts = data.alerts || [];
+      const total = data.total || 0;
+      liveDot.classList.remove('off');
+      statusTxt.textContent = 'Connected';
+      totalEl.textContent = total;
+      if (newAlerts.length) {
+        emptyLog.style.display = 'none';
+        emptyToast.style.display = 'none';
+        lastEl.textContent = fmtTime(newAlerts[newAlerts.length-1].timestamp);
+        newAlerts.forEach(a => {
+          allAlerts.push(a);
+          logEl.insertBefore(makeCard(a, true), logEl.firstChild);
+          toastArea.appendChild(makeToast(a));
+          toastArea.scrollTop = toastArea.scrollHeight;
+        });
+        seenCount = total;
+      }
+    } catch(e) {
+      liveDot.classList.add('off');
+      statusTxt.textContent = '未接続 — 再接続中…';
+    }
+  }
+
+  function clearToasts() {
+    toastArea.innerHTML = '';
+    toastArea.appendChild(emptyToast);
+    emptyToast.style.display = '';
+  }
+
+  function clearAll() {
+    allAlerts = []; seenCount = 0;
+    logEl.innerHTML = ''; logEl.appendChild(emptyLog); emptyLog.style.display = '';
+    clearToasts(); totalEl.textContent = '0'; lastEl.textContent = '—';
+  }
+
+  poll();
+  setInterval(poll, 2000);
+</script>
+{% endblock %}

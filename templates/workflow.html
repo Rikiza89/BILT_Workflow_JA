@@ -1,0 +1,1851 @@
+{% extends "base.html" %}
+{% block title %}Workflow Editor – BILT Workflow{% endblock %}
+
+{% block head %}
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── Full-page layout ── */
+  .wf-page { display: flex; flex-direction: column; height: calc(100vh - 52px); overflow: hidden; }
+  .wf-toolbar {
+    height: 52px; min-height: 52px;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 16px; gap: 10px; flex-shrink: 0;
+  }
+
+  /* ── Workflow node-type colour tokens ── */
+  :root {
+    --col-start:        #22c55e;
+    --col-bilt-detect:  #e879f9;
+    --col-loop:         #a855f7;
+    --col-alert:        #f97316;
+    --col-wait:         #14b8a6;
+    --col-end:          #6b7280;
+  }
+
+  /* Light mode component overrides */
+  [data-theme="light"] .wf-node {
+    background: var(--node-bg);
+    box-shadow: 0 2px 8px rgba(0,0,0,.12);
+  }
+  [data-theme="light"] .port { background: var(--node-bg); border-color: #94a3b8; }
+  [data-theme="light"] .wf-btn {
+    background: var(--surface); color: var(--text); border-color: var(--border);
+  }
+  [data-theme="light"] .wf-btn:hover { background: var(--surface2); }
+  [data-theme="light"] .wf-btn-run   { background: #dcfce7; border-color: #22c55e; color: #166534; }
+  [data-theme="light"] .wf-btn-run:hover { background: #bbf7d0; }
+  [data-theme="light"] .wf-btn-pause { background: #fef3c7; border-color: #f97316; color: #92400e; }
+  [data-theme="light"] .wf-btn-stop  { background: #fee2e2; border-color: #ef4444; color: #991b1b; }
+  [data-theme="light"] .wf-btn-resume{ background: #dbeafe; border-color: var(--accent); color: #1e40af; }
+  [data-theme="light"] .wf-status-badge.idle      { background:#f1f5f9; color:#64748b; }
+  [data-theme="light"] .wf-status-badge.running   { background:#dcfce7; color:#166534; }
+  [data-theme="light"] .wf-status-badge.paused    { background:#fef3c7; color:#92400e; }
+  [data-theme="light"] .wf-status-badge.completed { background:#dbeafe; color:#1e40af; }
+  [data-theme="light"] .wf-status-badge.error     { background:#fee2e2; color:#991b1b; }
+  [data-theme="light"] .field input[type=text],
+  [data-theme="light"] .field input[type=number],
+  [data-theme="light"] .field textarea,
+  [data-theme="light"] .field select {
+    background: var(--input-bg); border-color: var(--border); color: var(--text);
+  }
+  [data-theme="light"] .wf-modal-item { background: transparent; }
+  [data-theme="light"] .wf-modal-item:hover { background: var(--surface2); }
+  [data-theme="light"] .wf-modal-input-row input {
+    background: var(--input-bg); border-color: var(--border); color: var(--text);
+  }
+  [data-theme="light"] .log-entry.info .le-msg { color: var(--text); }
+  [data-theme="light"] .classes-input-row button { background:#dbeafe; border-color:var(--accent); color:#1e40af; }
+  [data-theme="light"] .btn-load-classes { background:#f0fdf4; border-color:var(--col-wait); color:#065f46; }
+  [data-theme="light"] .props-del-node { background:#fee2e2; border-color:#ef4444; color:#991b1b; }
+
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: var(--bg); color: var(--text); height: 100vh;
+        overflow: hidden; display: flex; flex-direction: column; }
+
+  /* ── Header ── */
+  .hdr {
+    height: 52px; min-height: 52px;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 16px; gap: 12px; flex-shrink: 0;
+  }
+  .wf-btn { padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;
+        cursor: pointer; border: 1px solid var(--border); background: #252d3d;
+        color: var(--text); transition: background .15s; white-space: nowrap; }
+  .wf-btn:hover { background: #2d3748; }
+  .wf-btn:disabled { opacity: .4; cursor: not-allowed; }
+  .wf-btn-run   { background: #166534; border-color: #22c55e; color: #bbf7d0; }
+  .wf-btn-run:hover   { background: #15803d; }
+  .wf-btn-pause { background: #854d0e; border-color: #f97316; color: #fed7aa; }
+  .wf-btn-pause:hover { background: #9a3412; }
+  .wf-btn-stop  { background: #7f1d1d; border-color: #ef4444; color: #fecaca; }
+  .wf-btn-stop:hover  { background: #991b1b; }
+  .wf-btn-resume{ background: #1e3a5f; border-color: var(--accent); color: #bfdbfe; }
+  .wf-btn-resume:hover{ background: #1d4ed8; }
+
+  .wf-status-badge {
+    padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .5px;
+  }
+  .wf-status-badge.idle      { background:#1f2937; color:var(--muted); }
+  .wf-status-badge.running   { background:#14532d; color:#86efac; }
+  .wf-status-badge.paused    { background:#78350f; color:#fde68a; }
+  .wf-status-badge.completed { background:#1e3a5f; color:#93c5fd; }
+  .wf-status-badge.error     { background:#7f1d1d; color:#fca5a5; }
+
+  .hdr-spacer { flex: 1; }
+
+  /* ── Body layout: palette | canvas | props ── */
+  .wf-body {
+    flex: 1; display: flex; overflow: hidden;
+  }
+
+  /* ── Palette ── */
+  .palette {
+    width: 150px; min-width: 150px; background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0;
+  }
+  .palette h3 { font-size: 10px; font-weight: 700; color: var(--muted);
+                text-transform: uppercase; letter-spacing: 1px; padding: 12px 12px 6px; }
+  .palette-item {
+    margin: 3px 8px; padding: 8px 10px; border-radius: 8px; cursor: grab;
+    border: 1px solid transparent; font-size: 12px; font-weight: 600;
+    user-select: none; display: flex; align-items: center; gap: 7px;
+    transition: opacity .15s;
+  }
+  .palette-item:hover { opacity: .85; }
+  .palette-item:active { cursor: grabbing; opacity: .7; }
+  .palette-item.type-start        { background:#14532d40; border-color:#22c55e80; color:#86efac; }
+  .palette-item.type-bilt-detect  { background:#4a104a40; border-color:#e879f980; color:#f5d0fe; }
+  .palette-item.type-loop         { background:#4c1d9540; border-color:#a855f780; color:#d8b4fe; }
+  .palette-item.type-alert        { background:#7c2d1240; border-color:#f9731680; color:#fed7aa; }
+  .palette-item.type-wait         { background:#0f3d3940; border-color:#14b8a680; color:#99f6e4; }
+  .palette-item.type-end          { background:#1f293740; border-color:#6b728080; color:#d1d5db; }
+
+  .palette-tip {
+    font-size: 10px; color: var(--muted); padding: 10px 12px;
+    line-height: 1.5; border-top: 1px solid var(--border); margin-top: auto;
+  }
+
+  /* ── Canvas viewport ── */
+  .canvas-viewport {
+    flex: 1; overflow: hidden; position: relative;
+    background: var(--bg);
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 40px 40px;
+    cursor: default;
+  }
+  .canvas-viewport.panning { cursor: grabbing; }
+
+  /* transform layer – contains both SVG and node divs */
+  #cvTransform { position: absolute; top: 0; left: 0;
+                transform-origin: 0 0; will-change: transform; }
+
+  #svgLayer {
+    position: absolute; top: 0; left: 0;
+    width: 6000px; height: 6000px;
+    pointer-events: none; overflow: visible;
+  }
+  #svgLayer path.conn {
+    pointer-events: stroke; cursor: pointer;
+  }
+  #svgLayer path.conn:hover { stroke-width: 4; }
+
+  #nodeLayer { position: absolute; top: 0; left: 0; }
+
+  /* ── Nodes ── */
+  .wf-node {
+    position: absolute;
+    width: 168px;
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background: var(--node-bg);
+    box-shadow: 0 4px 16px rgba(0,0,0,.5);
+    cursor: default;
+    user-select: none;
+    transition: box-shadow .15s;
+  }
+  .wf-node:hover   { box-shadow: 0 6px 24px rgba(0,0,0,.7); }
+  .wf-node.selected { outline: 2px solid #60a5fa; outline-offset: 2px; }
+  .wf-node.active-node { outline: 2px solid #fbbf24; outline-offset: 2px;
+                          animation: nodeGlow .8s ease-in-out infinite alternate; }
+  @keyframes nodeGlow {
+    from { box-shadow: 0 0 8px rgba(251,191,36,.3); }
+    to   { box-shadow: 0 0 20px rgba(251,191,36,.8); }
+  }
+
+  .node-header {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 10px; border-radius: 8px 8px 0 0;
+    cursor: move;
+  }
+  .node-icon   { font-size: 14px; flex-shrink: 0; }
+  .node-label  { font-size: 12px; font-weight: 700; flex: 1;
+                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .node-del    { background: none; border: none; color: rgba(255,255,255,.5);
+                cursor: pointer; font-size: 16px; padding: 0 2px; line-height: 1;
+                flex-shrink: 0; }
+  .node-del:hover { color: #ef4444; }
+
+  .node-body { padding: 6px 10px; font-size: 11px; color: var(--muted); line-height: 1.5;
+              min-height: 14px; }
+
+  /* ports row: input ports on left, output ports on right */
+  .node-ports {
+    display: flex; justify-content: space-between;
+    padding: 4px 0 6px;
+  }
+  .ports-col { display: flex; flex-direction: column; gap: 4px; }
+  .ports-left  { align-items: flex-start; padding-left: 0; }
+  .ports-right { align-items: flex-end;   padding-right: 0; }
+
+  .port-wrap { display: flex; align-items: center; gap: 4px; cursor: crosshair; padding: 3px 0; }
+  .port-wrap.out-port { flex-direction: row-reverse; }
+
+  .port {
+    width: 12px; height: 12px; border-radius: 50%;
+    border: 2px solid #4b5563; background: var(--node-bg);
+    cursor: crosshair; flex-shrink: 0;
+    transition: transform .1s, border-color .1s;
+    position: relative;
+  }
+  .port.in-port  { margin-left: -7px; }
+  .port.out-port { margin-right: -7px; }
+  .port:hover { transform: scale(1.4); border-color: #fff; }
+
+  .port-lbl {
+    font-size: 10px; font-weight: 600;
+    padding: 1px 4px; border-radius: 3px;
+  }
+
+  /* port label colors */
+  .port-success .port { border-color: #22c55e; }
+  .port-success .port-lbl { color: #86efac; background: #14532d40; }
+  .port-failure .port { border-color: #ef4444; }
+  .port-failure .port-lbl { color: #fca5a5; background: #7f1d1d40; }
+  .port-body    .port { border-color: #a855f7; }
+  .port-body    .port-lbl { color: #d8b4fe; background: #4c1d9540; }
+  .port-out     .port { border-color: #9ca3af; }
+  .port-out     .port-lbl { color: #d1d5db; background: #37415140; }
+
+  /* ── Properties panel ── */
+  .props-panel {
+    width: 250px; min-width: 250px; background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex; flex-direction: column; flex-shrink: 0;
+  }
+  .props-panel h3 { font-size: 10px; font-weight: 700; color: var(--muted);
+                    text-transform: uppercase; letter-spacing: 1px;
+                    padding: 12px 14px 8px; border-bottom: 1px solid var(--border); }
+  .props-body { flex: 1; overflow-y: auto; padding: 12px; }
+  .props-empty { color: var(--muted); font-size: 12px; text-align: center;
+                margin-top: 40px; padding: 0 20px; line-height: 1.6; }
+
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 11px; font-weight: 600; color: var(--muted);
+                margin-bottom: 4px; text-transform: uppercase; letter-spacing: .4px; }
+  .field input[type=text], .field input[type=number], .field textarea, .field select {
+    width: 100%; background: var(--input-bg); border: 1px solid var(--border);
+    color: var(--text); padding: 6px 8px; border-radius: 6px;
+    font-size: 12px; font-family: inherit;
+  }
+  .field input:focus, .field textarea:focus, .field select:focus {
+    outline: none; border-color: var(--accent);
+  }
+  .field textarea { resize: vertical; min-height: 56px; }
+  .field-row { display: flex; align-items: center; gap: 8px; }
+  .field-row input[type=checkbox] { width: 15px; height: 15px; cursor: pointer; flex-shrink: 0; }
+  .field-row label { font-size: 12px; color: var(--text); text-transform: none;
+                    letter-spacing: 0; margin-bottom: 0; cursor: pointer; }
+  .sub-field { margin-left: 12px; border-left: 2px solid var(--border);
+              padding-left: 10px; margin-top: 6px; }
+  .field-hint { font-size: 10px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+
+  .classes-wrap { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;
+                  min-height: 28px; }
+  .class-chip {
+    background: #1e3a5f; border: 1px solid #3b82f6; color: #93c5fd;
+    border-radius: 12px; padding: 2px 8px; font-size: 11px;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .class-chip button { background:none; border:none; color:inherit;
+                      cursor:pointer; font-size:13px; line-height:1; padding:0; }
+  .class-chip button:hover { color: #ef4444; }
+  .classes-input-row { display: flex; gap: 4px; margin-top: 4px; }
+  .classes-input-row input { flex:1; }
+  .classes-input-row button { padding: 5px 10px; border-radius:6px;
+                              background:#1e3a5f; border:1px solid #3b82f6;
+                              color:#93c5fd; cursor:pointer; font-size:12px; }
+  .classes-input-row button:hover { background:#1d4ed8; }
+
+  .btn-load-classes { width: 100%; margin-top: 6px; padding: 5px;
+                      background: #0f3d39; border: 1px solid var(--col-wait);
+                      color: #99f6e4; border-radius: 6px; cursor: pointer;
+                      font-size: 11px; }
+  .btn-load-classes:hover { background: #0d4d48; }
+
+  .props-del-node { width: 100%; margin-top: 16px; padding: 7px;
+                    background: #7f1d1d40; border: 1px solid #ef444480;
+                    color: #fca5a5; border-radius: 6px; cursor: pointer; font-size: 12px; }
+  .props-del-node:hover { background: #7f1d1d80; }
+
+  /* ── Monitor panel (right side, below props) ── */
+  .monitor-panel {
+    border-top: 1px solid var(--border);
+    padding: 10px;
+    flex-shrink: 0;
+  }
+  .monitor-controls {
+    display: flex; gap: 5px; align-items: center; margin-bottom: 5px;
+  }
+  .monitor-status {
+    font-size: 10px; color: var(--muted); margin-bottom: 5px;
+  }
+  .monitor-panel h4 {
+    font-size: 10px; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;
+  }
+  .monitor-frame {
+    width: 100%; border-radius: 6px; border: 1px solid var(--border);
+    background: #000; display: block;
+    aspect-ratio: 4/3; object-fit: cover;
+  }
+  .monitor-dets {
+    margin-top: 6px; font-size: 11px; color: var(--muted);
+    max-height: 80px; overflow-y: auto;
+  }
+  .det-chip {
+    display: inline-block; background: #1e3a5f; border: 1px solid #3b82f640;
+    color: #93c5fd; border-radius: 3px; padding: 1px 5px; margin: 1px;
+    font-size: 10px;
+  }
+
+  /* ── Log panel (bottom) ── */
+  .log-panel {
+    height: 120px; min-height: 120px; flex-shrink: 0;
+    background: var(--log-bg); border-top: 1px solid var(--border);
+    display: flex; flex-direction: column;
+  }
+  .log-hdr { display: flex; align-items: center; padding: 4px 12px;
+            gap: 8px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .log-hdr span { font-size: 10px; font-weight: 700; color: var(--muted);
+                  text-transform: uppercase; letter-spacing: 1px; }
+  .log-clear { margin-left: auto; background: none; border: none;
+              color: var(--muted); cursor: pointer; font-size: 11px; }
+  .log-clear:hover { color: var(--text); }
+  .log-entries {
+    flex: 1; overflow-y: auto; padding: 4px 12px;
+    font-family: 'Courier New', monospace; font-size: 11px;
+  }
+  .log-entry { padding: 1px 0; line-height: 1.5; }
+  .log-entry .le-time { color: #4b5563; margin-right: 6px; }
+  .log-entry.info    .le-msg { color: #d1d5db; }
+  .log-entry.success .le-msg { color: #86efac; }
+  .log-entry.warning .le-msg { color: #fde68a; }
+  .log-entry.error   .le-msg { color: #fca5a5; }
+
+  /* ── Modal ── */
+  .wf-modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.7);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000; display: none;
+  }
+  .wf-modal-overlay.open { display: flex; }
+  .wf-modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 24px; width: 380px; max-height: 80vh;
+    display: flex; flex-direction: column;
+  }
+  .wf-modal h2 { font-size: 16px; margin-bottom: 16px; }
+  .wf-modal-list { flex: 1; overflow-y: auto; margin-bottom: 16px; }
+  .wf-modal-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border);
+    margin-bottom: 6px; font-size: 13px; cursor: pointer;
+  }
+  .wf-modal-item:hover { background: #252d3d; }
+  .wf-modal-item-meta { font-size: 11px; color: var(--muted); }
+  .wf-modal-item-del { background: none; border: none; color: var(--muted);
+                    cursor: pointer; font-size: 16px; }
+  .wf-modal-item-del:hover { color: #ef4444; }
+  .wf-modal-input-row { display: flex; gap: 8px; }
+  .wf-modal-input-row input { flex: 1; background: var(--input-bg); border: 1px solid var(--border);
+                            color: var(--text); padding: 7px 10px; border-radius: 6px;
+                            font-size: 13px; }
+  .wf-modal-input-row input:focus { outline: none; border-color: var(--accent); }
+  .wf-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+  /* drag ghost */
+  #dragGhost {
+    position: fixed; pointer-events: none; z-index: 999;
+    width: 130px; padding: 6px 10px; border-radius: 6px;
+    font-size: 12px; font-weight: 600; opacity: .85;
+    display: none;
+  }
+</style>
+{% endblock %}
+
+{% block outer_content %}
+<div class="wf-page">
+
+<!-- drag ghost -->
+<div id="dragGhost"></div>
+
+<!-- ── Workflow toolbar ── -->
+<div class="wf-toolbar">
+  <div style="display:flex;gap:6px;">
+    <button class="wf-btn" id="btnNew" title="Clear canvas">新規作成</button>
+    <button class="wf-btn" id="btnSave" title="Save workflow">保存</button>
+    <button class="wf-btn" id="btnLoad" title="Load saved workflow">ロード</button>
+    <button class="wf-btn" id="btnExport" title="Export JSON">エクスポート</button>
+  </div>
+  <div style="width:1px;height:24px;background:var(--border);"></div>
+  <div style="display:flex;gap:6px;">
+    <button class="wf-btn wf-btn-run"    id="btnRun">▶ 起動</button>
+    <button class="wf-btn wf-btn-resume" id="btnResume" style="display:none">⏯ 再開</button>
+    <button class="wf-btn wf-btn-stop"   id="btnStop" disabled>⏹ 停止</button>
+  </div>
+  <div style="width:1px;height:24px;background:var(--border);"></div>
+  <span class="wf-status-badge idle" id="statusBadge">Idle</span>
+  <div style="flex:1;"></div>
+  <span style="font-size:11px;color:var(--muted);" id="wfName">タイトルなし</span>
+</div>
+
+<!-- ── Body ── -->
+<div class="wf-body">
+
+  <!-- Left palette -->
+  <aside class="palette">
+    <h3>ノード</h3>
+    <div class="palette-item type-start" draggable="true" data-type="start">
+      <span>▶</span> 開始
+    </div>
+    <div class="palette-item type-bilt-detect" draggable="true" data-type="bilt_detection">
+      <span>🔮</span> BILT検知
+    </div>
+    <div class="palette-item type-loop" draggable="true" data-type="loop">
+      <span>🔄</span> ループ
+    </div>
+    <div class="palette-item type-alert" draggable="true" data-type="alert">
+      <span>🔔</span> アラート
+    </div>
+    <div class="palette-item type-wait" draggable="true" data-type="wait">
+      <span>⏱</span> 待機
+    </div>
+    <div class="palette-item type-end" draggable="true" data-type="end">
+      <span>⏹</span> 終了
+    </div>
+    <div class="palette-tip">
+      ノードをキャンバス上にドラッグします。<br>
+      出力（右）から入力（左）へドラッグしてポートを接続します。<br>
+      接続をクリックすると削除されます。
+    </div>
+  </aside>
+
+  <!-- Canvas -->
+  <div class="canvas-viewport" id="canvasViewport">
+    <div id="cvTransform">
+      <svg id="svgLayer">
+        <defs>
+          <marker id="arr-out"     markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+            <path d="M 0 0 L 9 3.5 L 0 7 Z" fill="#9ca3af"/>
+          </marker>
+          <marker id="arr-success" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+            <path d="M 0 0 L 9 3.5 L 0 7 Z" fill="#22c55e"/>
+          </marker>
+          <marker id="arr-failure" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+            <path d="M 0 0 L 9 3.5 L 0 7 Z" fill="#ef4444"/>
+          </marker>
+          <marker id="arr-body"    markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+            <path d="M 0 0 L 9 3.5 L 0 7 Z" fill="#a855f7"/>
+          </marker>
+        </defs>
+        <path id="tempPath" d="" stroke="#60a5fa" stroke-width="2"
+              stroke-dasharray="6 4" fill="none" opacity=".7" pointer-events="none"/>
+      </svg>
+      <div id="nodeLayer"></div>
+    </div>
+  </div>
+
+  <!-- Right: properties + monitor -->
+  <aside class="props-panel" id="propsPanel">
+    <h3>プロパティ</h3>
+    <div class="props-body" id="propsBody">
+      <p class="props-empty">プロパティを編集するノードを選択してください。</p>
+    </div>
+
+    <!-- Live monitor -->
+    <div class="monitor-panel">
+      <h4>📷 ライブモニター</h4>
+      <div class="monitor-controls">
+        <select id="monitorCameraSelect" style="flex:1;min-width:0;font-size:11px;padding:3px 5px;background:var(--surface);border:1px solid var(--border);color:var(--fg);border-radius:4px;">
+          <option value="">カメラのロード中…</option>
+        </select>
+        <button id="monitorStartBtn" style="font-size:11px;padding:3px 8px;background:#166534;color:#bbf7d0;border:none;border-radius:4px;cursor:pointer;white-space:nowrap;">▶ カメラ開始</button>
+      </div>
+      <div id="monitorStatus" class="monitor-status">● カメラ停止</div>
+      <img id="monitorImg" class="monitor-frame" src="" alt="live feed">
+      <div class="monitor-dets" id="monitorDets">検出がありません</div>
+    </div>
+  </aside>
+
+</div><!-- wf-body -->
+
+<!-- Log panel -->
+<div class="log-panel">
+  <div class="log-hdr">
+    <span>実行ログ</span>
+    <button class="log-clear" id="btnClearLog">クリア</button>
+  </div>
+  <div class="log-entries" id="logEntries"></div>
+</div>
+
+<!-- Save modal -->
+<div class="wf-modal-overlay" id="modalSave">
+  <div class="wf-modal">
+    <h2>ワークフローを保存</h2>
+    <div class="wf-modal-input-row">
+      <input type="text" id="saveNameInput" placeholder="ワークフロー名…" maxlength="64">
+    </div>
+    <br>
+    <div class="wf-modal-actions">
+      <button class="wf-btn" id="btnSaveCancel">戻る</button>
+      <button class="wf-btn wf-btn-run" id="btnSaveConfirm">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Load modal -->
+<div class="wf-modal-overlay" id="modalLoad">
+  <div class="wf-modal">
+    <h2>ワークフローをロード</h2>
+    <div class="wf-modal-list" id="loadList"></div>
+    <div class="wf-modal-actions">
+      <button class="wf-btn" id="btnLoadCancel">閉じる</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+// ══════════════════════════════════════════════════════════════════════════════
+// 状態
+// ══════════════════════════════════════════════════════════════════════════════
+const state = {
+  nodes: [],   // [{id, type, x, y, config}]
+  edges: [],   // [{id, from_node, from_port, to_node, to_port}]
+  selectedId:  null,
+  pan: { x: 80, y: 60 },
+  zoom: 1,
+  connecting: null,  // {fromNodeId, fromPort, tempPathEl}
+  dragging:   null,  // {nodeId, sx, sy, ox, oy}
+  panning:    false,
+  panStart:   null,
+  wfName: 'Untitled',
+  wfStatus: 'idle',
+  monitorActive: false,
+  statusInterval: null,
+};
+
+// ── ノードの定義  ──────────────────────────────────────────────────────────
+const DEFS = {
+  start: {
+    color: '#22c55e', label: '開始', icon: '▶',
+    inputs:  [],
+    outputs: [{ port: 'out', cls: 'port-out' }],
+  },
+  detection: {
+    color: '#3b82f6', label: '検出', icon: '🎯',
+    inputs:  [{ port: 'in', cls: 'port-out' }],
+    outputs: [
+      { port: 'success', cls: 'port-success' },
+      { port: 'failure', cls: 'port-failure' },
+    ],
+  },
+  bilt_detection: {
+    color: '#e879f9', label: 'BILT検出', icon: '🔮',
+    inputs:  [{ port: 'in', cls: 'port-out' }],
+    outputs: [
+      { port: 'success', cls: 'port-success' },
+      { port: 'failure', cls: 'port-failure' },
+    ],
+  },
+  loop: {
+    color: '#a855f7', label: 'ループ', icon: '🔄',
+    inputs:  [{ port: 'in', cls: 'port-out' }],
+    outputs: [
+      { port: 'body', cls: 'port-body' },
+      { port: 'out',  cls: 'port-out'  },
+    ],
+  },
+  alert: {
+    color: '#f97316', label: 'アラート', icon: '🔔',
+    inputs:  [{ port: 'in', cls: 'port-out' }],
+    outputs: [{ port: 'out', cls: 'port-out' }],
+  },
+  wait: {
+    color: '#14b8a6', label: '待機', icon: '⏱',
+    inputs:  [{ port: 'in', cls: 'port-out' }],
+    outputs: [{ port: 'out', cls: 'port-out' }],
+  },
+  end: {
+    color: '#6b7280', label: '終了', icon: '⏹',
+    inputs:  [{ port: 'in', cls: 'port-out' }],
+    outputs: [],
+  },
+};
+
+const PORT_LABELS = { out: '→', success: '✓', failure: '✗', body: '↺', in: '' };
+const EDGE_COLORS = {
+  out: '#9ca3af', success: '#22c55e', failure: '#ef4444',
+  body: '#a855f7', in: '#9ca3af',
+};
+const MARKER_IDS = {
+  out: 'arr-out', success: 'arr-success', failure: 'arr-failure',
+  body: 'arr-body',
+};
+
+const NODE_W = 168;
+const PORT_OFFSET_X = 8; 
+
+function defCfg(type) {
+  switch (type) {
+    case 'bilt_detection': return {
+      label: 'BILT検出', model: '', classes: [], count_required: 1,
+      timeout: 30, failure_action: 'alert_pause',
+    };
+    case 'loop':  return { label: 'ループ', max_iterations: 3 };
+    case 'alert': return {
+      label: 'アラート', message: 'ワークフローアラート',
+      http_enabled: false, http_url: '',
+      udp_enabled: true, udp_ip: '192.168.1.255', udp_port: 9999,
+      send_snapshot: false, popup_enabled: false,
+    };
+    case 'wait':  return { label: '待機', duration: 5 };
+    case 'start': return { label: '開始' };
+    case 'end':   return { label: '終了' };
+    default:      return {};
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 座標ヘルパー
+// ══════════════════════════════════════════════════════════════════════════════
+function screenToWorld(ex, ey) {
+  const vp = document.getElementById('canvasViewport');
+  const rect = vp.getBoundingClientRect();
+  return {
+    x: (ex - rect.left - state.pan.x) / state.zoom,
+    y: (ey - rect.top  - state.pan.y) / state.zoom,
+  };
+}
+
+function applyTransform() {
+  const t = document.getElementById('cvTransform');
+  t.style.transform = `translate(${state.pan.x}px,${state.pan.y}px) scale(${state.zoom})`;
+}
+
+// World-coordinate position of a port
+function portWorldPos(nodeId, portName, isOutput) {
+  const node = state.nodes.find(n => n.id === nodeId);
+  if (!node) return null;
+  const def = DEFS[node.type];
+  const ports = isOutput ? def.outputs : def.inputs;
+  const idx = ports.findIndex(p => p.port === portName);
+  const total = ports.length;
+  const el = document.getElementById('node-' + nodeId);
+  const h = el ? el.offsetHeight : 80;
+  const y = node.y + (h / (total + 1)) * (idx + 1);
+  const x = isOutput ? node.x + NODE_W : node.x;
+  return { x, y };
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Rendering
+// ══════════════════════════════════════════════════════════════════════════════
+function renderAll() {
+  renderNodes();
+  renderEdges();
+}
+
+function renderNodes() {
+  const layer = document.getElementById('nodeLayer');
+  // remove stale
+  [...layer.children].forEach(el => {
+    if (!state.nodes.find(n => n.id === el.dataset.nid)) el.remove();
+  });
+  state.nodes.forEach(renderNode);
+}
+
+function renderNode(node) {
+  const def = DEFS[node.type];
+  if (!def) return;
+  const layer = document.getElementById('nodeLayer');
+  let el = document.getElementById('node-' + node.id);
+  const isNew = !el;
+  if (isNew) {
+    el = document.createElement('div');
+    el.id = 'node-' + node.id;
+    el.dataset.nid = node.id;
+    el.className = 'wf-node';
+    layer.appendChild(el);
+  }
+
+  el.classList.toggle('selected', state.selectedId === node.id);
+  el.style.left = node.x + 'px';
+  el.style.top  = node.y + 'px';
+  el.style.borderColor = def.color + '80';
+
+  const cfg = node.config || {};
+  const lbl = cfg.label || def.label;
+
+  // Output ports html
+  const outPortsHtml = def.outputs.map(o => `
+    <div class="port-wrap out-port ${o.cls}" data-nid="${node.id}" data-port="${o.port}" data-io="out">
+      <span class="port-lbl">${PORT_LABELS[o.port] || o.port}</span>
+      <div class="port out-port" data-nid="${node.id}" data-port="${o.port}" data-io="out"></div>
+    </div>`).join('');
+
+  // Input ports html
+  const inPortsHtml = def.inputs.map(i => `
+    <div class="port-wrap in-port ${i.cls}" data-nid="${node.id}" data-port="${i.port}" data-io="in">
+      <div class="port in-port" data-nid="${node.id}" data-port="${i.port}" data-io="in"></div>
+    </div>`).join('');
+
+  el.innerHTML = `
+    <div class="node-header" style="background:${def.color}22; border-bottom:1px solid ${def.color}40;">
+      <span class="node-icon">${def.icon}</span>
+      <span class="node-label">${esc(lbl)}</span>
+      <button class="node-del" data-del="${node.id}" title="ノードを削除">×</button>
+    </div>
+    <div class="node-body">${nodeSummary(node)}</div>
+    <div class="node-ports">
+      <div class="ports-col ports-left">${inPortsHtml}</div>
+      <div class="ports-col ports-right">${outPortsHtml}</div>
+    </div>`;
+
+  // events
+  el.querySelector('.node-header').addEventListener('mousedown', onNodeDragStart);
+  el.querySelector('[data-del]').addEventListener('click', e => {
+    e.stopPropagation();
+    deleteNode(e.currentTarget.dataset.del);
+  });
+  el.addEventListener('mousedown', e => {
+    const onPort = e.target.classList.contains('port') ||
+                   e.target.classList.contains('port-wrap') ||
+                   e.target.classList.contains('port-lbl');
+    if (!onPort && !e.target.dataset.del) {
+      selectNode(node.id);
+    }
+  });
+  el.querySelectorAll('.port-wrap[data-io="out"]').forEach(p =>
+    p.addEventListener('mousedown', onPortDragStart));
+  el.querySelectorAll('.port-wrap[data-io="in"]').forEach(p =>
+    p.addEventListener('mouseup', onPortDrop));
+}
+
+function nodeSummary(node) {
+  const c = node.config || {};
+  switch (node.type) {
+    case 'bilt_detection': {
+      const cls = (c.classes || []).join(', ') || '<i>全クラス</i>';
+      const fa = { alert_pause: '⏸ 停止', alert_retry: '↺ 再開', skip_log: '⏭ スキップ' }[c.failure_action] || '';
+      const camLabel = c.camera_name ? `📷 ${esc(c.camera_name)}` : (c.camera_index != null ? `📷 cam${c.camera_index}` : '📷 デフォルト');
+      return `${camLabel}<br><b>${cls}</b><br>×${c.count_required} | ⏱${c.timeout}s | ${fa}`;
+    }
+    case 'loop':
+      return `繰り返し: <b>${c.max_iterations === 0 ? '∞' : c.max_iterations}</b>`;
+    case 'alert': {
+      const p = [];
+      if (c.http_enabled)   p.push('HTTP');
+      if (c.udp_enabled)    p.push('UDP');
+      if (c.popup_enabled)  p.push('Popup');
+      const snap = c.send_snapshot ? ' 📷' : '';
+      return `${esc(c.message || '')}<br><span style="color:#f9731680">${p.join(' + ') || 'no protocol'}${snap}</span>`;
+    }
+    case 'wait':
+      return `間隔: <b>${c.duration}秒</b>`;
+    default:
+      return '';
+  }
+}
+
+function renderEdges() {
+  const svg = document.getElementById('svgLayer');
+  svg.querySelectorAll('path.conn').forEach(p => p.remove());
+  state.edges.forEach(edge => {
+    const fp = portWorldPos(edge.from_node, edge.from_port, true);
+    const tp = portWorldPos(edge.to_node,   edge.to_port,   false);
+    if (!fp || !tp) return;
+
+    const dx = Math.max(60, Math.abs(tp.x - fp.x) * 0.55);
+    const d = `M ${fp.x} ${fp.y} C ${fp.x+dx} ${fp.y} ${tp.x-dx} ${tp.y} ${tp.x} ${tp.y}`;
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('class', 'conn');
+    path.setAttribute('d', d);
+    path.setAttribute('stroke', EDGE_COLORS[edge.from_port] || '#9ca3af');
+    path.setAttribute('stroke-width', '2');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('marker-end', `url(#${MARKER_IDS[edge.from_port] || 'arr-out'})`);
+    path.dataset.eid = edge.id;
+    path.style.pointerEvents = 'stroke';
+    path.addEventListener('click', e => {
+      e.stopPropagation();
+      if (confirm('この接続を削除しますか？')) {
+        state.edges = state.edges.filter(ed => ed.id !== edge.id);
+        renderEdges();
+      }
+    });
+    svg.appendChild(path);
+  });
+}
+
+function updateTempPath(x1, y1, x2, y2) {
+  const tp = document.getElementById('tempPath');
+  const dx = Math.max(60, Math.abs(x2-x1) * 0.55);
+  tp.setAttribute('d', `M ${x1} ${y1} C ${x1+dx} ${y1} ${x2-dx} ${y2} ${x2} ${y2}`);
+}
+function clearTempPath() {
+  document.getElementById('tempPath').setAttribute('d', '');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Node / edge CRUD
+// ══════════════════════════════════════════════════════════════════════════════
+function createNode(type, x, y) {
+  const id = 'n_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
+  const node = { id, type, x, y, config: defCfg(type) };
+  state.nodes.push(node);
+  renderNode(node);
+  renderEdges();
+  selectNode(id);
+}
+
+function deleteNode(id) {
+  state.nodes = state.nodes.filter(n => n.id !== id);
+  state.edges = state.edges.filter(e => e.from_node !== id && e.to_node !== id);
+  if (state.selectedId === id) {
+    state.selectedId = null;
+    showProps(null);
+  }
+  document.getElementById('node-' + id)?.remove();
+  renderEdges();
+}
+
+function selectNode(id) {
+  state.selectedId = id;
+  state.nodes.forEach(n => {
+    const el = document.getElementById('node-' + n.id);
+    if (el) el.classList.toggle('selected', n.id === id);
+  });
+  showProps(state.nodes.find(n => n.id === id) || null);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// マウスイベントハンドラー
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── ノードドラッグ ─────────────────────────────────────────────────────────────────
+function onNodeDragStart(e) {
+  if (e.target.dataset.del) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const el = e.currentTarget.closest('.wf-node');
+  const nid = el.dataset.nid;
+  const node = state.nodes.find(n => n.id === nid);
+  if (!node) return;
+  selectNode(nid);
+  state.dragging = { nodeId: nid, sx: e.clientX, sy: e.clientY, ox: node.x, oy: node.y };
+}
+
+// ── ポート接続のドラッグ ───────────────────────────────────────────────────────
+function onPortDragStart(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  const nid  = e.currentTarget.dataset.nid;
+  const port = e.currentTarget.dataset.port;
+  const fp = portWorldPos(nid, port, true);
+  if (!fp) return;
+  state.connecting = { fromNodeId: nid, fromPort: port, fx: fp.x, fy: fp.y };
+}
+
+function onPortDrop(e) {
+  e.stopPropagation();
+  if (!state.connecting) return;
+  const toNid  = e.currentTarget.dataset.nid;
+  const toPort = e.currentTarget.dataset.port;
+  const { fromNodeId, fromPort } = state.connecting;
+
+  if (fromNodeId === toNid) { finishConnect(); return; }
+  // 重複を回避
+  const dup = state.edges.find(
+    ed => ed.from_node === fromNodeId && ed.from_port === fromPort
+       && ed.to_node   === toNid      && ed.to_port   === toPort
+  );
+  if (!dup) {
+    const eid = 'e_' + Date.now();
+    state.edges.push({ id: eid, from_node: fromNodeId, from_port: fromPort,
+                       to_node: toNid, to_port: toPort });
+    renderEdges();
+  }
+  finishConnect();
+}
+
+function finishConnect() {
+  state.connecting = null;
+  clearTempPath();
+}
+
+// ── カンヴァス───────────────────────────────────────────────────────────────
+function onCanvasMouseDown(e) {
+  if (e.target !== e.currentTarget && e.target.id !== 'cvTransform' && e.target.id !== 'svgLayer') return;
+  if (e.button === 0) {
+    state.panning = true;
+    state.panStart = { x: e.clientX - state.pan.x, y: e.clientY - state.pan.y };
+    document.getElementById('canvasViewport').classList.add('panning');
+    selectNode(null);
+  }
+}
+
+// ── グローバルマウスムーブ / アップ ────────────────────────────────────────────────────
+document.addEventListener('mousemove', e => {
+  if (state.dragging) {
+    const { nodeId, sx, sy, ox, oy } = state.dragging;
+    const dx = (e.clientX - sx) / state.zoom;
+    const dy = (e.clientY - sy) / state.zoom;
+    const node = state.nodes.find(n => n.id === nodeId);
+    if (node) {
+      node.x = ox + dx;
+      node.y = oy + dy;
+      const el = document.getElementById('node-' + nodeId);
+      if (el) { el.style.left = node.x + 'px'; el.style.top = node.y + 'px'; }
+      renderEdges();
+    }
+    return;
+  }
+
+  if (state.connecting) {
+    const w = screenToWorld(e.clientX, e.clientY);
+    updateTempPath(state.connecting.fx, state.connecting.fy, w.x, w.y);
+    return;
+  }
+
+  if (state.panning && state.panStart) {
+    state.pan.x = e.clientX - state.panStart.x;
+    state.pan.y = e.clientY - state.panStart.y;
+    applyTransform();
+  }
+});
+
+document.addEventListener('mouseup', e => {
+  if (state.dragging) { state.dragging = null; return; }
+  if (state.connecting) { finishConnect(); return; }
+  if (state.panning) {
+    state.panning = false;
+    document.getElementById('canvasViewport').classList.remove('panning');
+    state.panStart = null;
+  }
+});
+
+// ── ズーム ──────────────────────────────────────────────────────────────────────
+document.getElementById('canvasViewport').addEventListener('wheel', e => {
+  e.preventDefault();
+  const vp = document.getElementById('canvasViewport');
+  const rect = vp.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const oldZoom = state.zoom;
+  state.zoom = Math.min(2, Math.max(0.25, state.zoom * (e.deltaY < 0 ? 1.1 : 0.91)));
+  
+  state.pan.x = mx - (mx - state.pan.x) * (state.zoom / oldZoom);
+  state.pan.y = my - (my - state.pan.y) * (state.zoom / oldZoom);
+  applyTransform();
+}, { passive: false });
+
+// ── キャンバスクリック (選択解除) ───────────────────────────────────────────────────
+document.getElementById('canvasViewport').addEventListener('mousedown', onCanvasMouseDown);
+
+// ── パレットのドラッグアンドドロップ ─────────────────────────────────────────────
+let _dragType = null;
+document.querySelectorAll('.palette-item').forEach(item => {
+  item.addEventListener('dragstart', e => {
+    _dragType = item.dataset.type;
+    const ghost = document.getElementById('dragGhost');
+    ghost.textContent = DEFS[_dragType].icon + ' ' + DEFS[_dragType].label;
+    ghost.style.display = 'block';
+    ghost.style.background = DEFS[_dragType].color + '33';
+    ghost.style.border = '1px solid ' + DEFS[_dragType].color;
+    ghost.style.color = '#fff';
+    e.dataTransfer.setDragImage(ghost, 65, 18);
+  });
+  item.addEventListener('dragend', () => {
+    _dragType = null;
+    document.getElementById('dragGhost').style.display = 'none';
+  });
+});
+
+const vp = document.getElementById('canvasViewport');
+vp.addEventListener('dragover', e => e.preventDefault());
+vp.addEventListener('drop', e => {
+  e.preventDefault();
+  if (!_dragType) return;
+  const w = screenToWorld(e.clientX, e.clientY);
+  createNode(_dragType, w.x, w.y);
+  _dragType = null;
+  document.getElementById('dragGhost').style.display = 'none';
+});
+
+// ── キーボード削除 ───────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if ((e.key === 'Delete' || e.key === 'Backspace') &&
+      !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) {
+    if (state.selectedId) deleteNode(state.selectedId);
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// プロパティパネル
+// ══════════════════════════════════════════════════════════════════════════════
+function showProps(node) {
+  const body = document.getElementById('propsBody');
+  if (!node) {
+    body.innerHTML = '<p class="props-empty">ノードを選択してプロパティを編集してください。</p>';
+    return;
+  }
+  const c = node.config;
+  let html = '';
+
+  // Common label field
+  html += field('ラベル', `<input type="text" id="cfg-label" value="${esc(c.label||'')}">`) ;
+
+  if (node.type === 'bilt_detection') {
+    html += `
+      <div class="field">
+        <label>カメラソース</label>
+        <select id="cfg-camera_index" style="width:100%">
+          <option value="0" ${(c.camera_index??0)===0?'selected':''}>カメラ 0 (デフォルト)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>BILTモデル</label>
+        <select id="cfg-bilt-model-select" style="width:100%">
+          <option value="">— BILTモデルを選択 —</option>
+        </select>
+        <button class="btn-load-classes" id="btnLoadBiltModel" style="margin-top:4px">↓ 選択したモデルをロード &amp; クラス</button>
+      </div>
+      <div class="field">
+        <label>ターゲットクラス</label>
+        <select multiple id="classesDropdown" size="7" style="width:100%">
+          ${(c.availableClasses||[]).map(cl =>
+            `<option value="${esc(cl)}" ${(c.classes||[]).includes(cl)?'selected':''}>${esc(cl)}</option>`
+          ).join('')}
+        </select>
+        <p class="field-hint" id="classesHint" style="margin-top:4px">${
+          (c.availableClasses||[]).length
+            ? 'Ctrl/Cmd+click で複数選択できます。未選択 = すべてのクラスを検出'
+            : 'クラスリストをロードするには、上のモデルをロードしてください。'
+        }</p>
+      </div>
+      ${field('最低限の検出数', `<input type="number" id="cfg-count_required" min="1" value="${c.count_required||1}">`)}
+      ${field('タイムアウト (秒)', `<input type="number" id="cfg-timeout" min="1" value="${c.timeout||30}">`)}
+      <div class="field">
+        <label>On failure</label>
+        <select id="cfg-failure_action">
+          ${opt('alert_pause', 'アラートをトリガーして一時停止（オペレーターの応答を待つ）', c.failure_action)}
+          ${opt('alert_retry', 'アラートをトリガーして再試行', c.failure_action)}
+          ${opt('skip_log',   'スキップ & エラーをログ',       c.failure_action)}
+        </select>
+      </div>`;
+
+  } else if (node.type === 'loop') {
+    html += field('最大反復回数 (0 = ∞)',
+      `<input type="number" id="cfg-max_iterations" min="0" value="${c.max_iterations??3}">`);
+
+  } else if (node.type === 'alert') {
+    html += field('メッセージ', `<textarea id="cfg-message">${esc(c.message||'')}</textarea>`);
+    html += `
+      <div class="field">
+        <div class="field-row">
+          <input type="checkbox" id="cfg-http_enabled" ${c.http_enabled?'checked':''}>
+          <label for="cfg-http_enabled">HTTP POST</label>
+        </div>
+        <div class="sub-field" id="httpFields" style="display:${c.http_enabled?'block':'none'}">
+          ${field('URL', `<input type="text" id="cfg-http_url" value="${esc(c.http_url||'')}" placeholder="http://192.168.1.x:port/alert">`)}
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-row">
+          <input type="checkbox" id="cfg-udp_enabled" ${c.udp_enabled?'checked':''}>
+          <label for="cfg-udp_enabled">UDP ブロードキャスト</label>
+        </div>
+        <div class="sub-field" id="udpFields" style="display:${c.udp_enabled?'block':'none'}">
+          ${field('IP / ブロードキャスト',
+            `<input type="text" id="cfg-udp_ip" value="${esc(c.udp_ip||'192.168.1.255')}" placeholder="192.168.1.255">`)}
+          ${field('ポート',
+            `<input type="number" id="cfg-udp_port" min="1" max="65535" value="${c.udp_port||9999}">`)}
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-row">
+          <input type="checkbox" id="cfg-send_snapshot" ${c.send_snapshot?'checked':''}>
+          <label for="cfg-send_snapshot">アラートにフレームスナップショットを含める</label>
+        </div>
+        <p class="field-hint">カメラフレームのbase64 JPEG画像をJSON本文に追加します。</p>
+      </div>
+      <div class="field">
+        <div class="field-row">
+          <input type="checkbox" id="cfg-popup_enabled" ${c.popup_enabled?'checked':''}>
+          <label for="cfg-popup_enabled">ブラウザーポップアップを表示</label>
+        </div>
+        <p class="field-hint">このブラウザータブでフルスクリーンのアラートダイアログを開きます。メッセージとスナップショット（キャプチャされた場合）が表示されます。ワークフローページが開いている場合のみ機能します。</p>
+      </div>`;
+
+  } else if (node.type === 'wait') {
+    html += field('所要時間（秒）',
+      `<input type="number" id="cfg-duration" min="0.1" step="0.5" value="${c.duration||5}">`);
+  }
+
+  html += `<button class="props-del-node" id="btnPropsDel">ノードを削除</button>`;
+  body.innerHTML = html;
+
+  // Wire up events
+  const wire = (id, key, transform) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const ev = el.type === 'checkbox' ? 'change' : 'input';
+    el.addEventListener(ev, () => {
+      node.config[key] = transform ? transform(el) : el.value;
+      renderNode(node);
+    });
+  };
+
+  wire('cfg-label', 'label');
+  wire('cfg-camera_index', 'camera_index', el => isNaN(Number(el.value)) ? el.value : (parseInt(el.value) || 0));
+  wire('cfg-model-select', 'model');
+  wire('cfg-count_required', 'count_required', el => parseInt(el.value)||1);
+  wire('cfg-timeout',        'timeout',         el => parseFloat(el.value)||30);
+  wire('cfg-conf',           'conf',            el => parseFloat(el.value)||0.25);
+  wire('cfg-iou',            'iou',             el => parseFloat(el.value)||0.45);
+  wire('cfg-max_det',        'max_det',         el => parseInt(el.value)||100);
+  wire('cfg-failure_action', 'failure_action');
+  wire('cfg-max_iterations', 'max_iterations',  el => parseInt(el.value)??3);
+  wire('cfg-duration',       'duration',         el => parseFloat(el.value)||1);
+  wire('cfg-message',        'message');
+  wire('cfg-http_url',       'http_url');
+  wire('cfg-udp_ip',         'udp_ip');
+  wire('cfg-udp_port',       'udp_port',         el => parseInt(el.value)||9999);
+
+  const httpCb  = document.getElementById('cfg-http_enabled');
+  const udpCb   = document.getElementById('cfg-udp_enabled');
+  const snapCb  = document.getElementById('cfg-send_snapshot');
+  const popupCb = document.getElementById('cfg-popup_enabled');
+  if (httpCb) httpCb.addEventListener('change', () => {
+    node.config.http_enabled = httpCb.checked;
+    document.getElementById('httpFields').style.display = httpCb.checked ? 'block' : 'none';
+    renderNode(node);
+  });
+  if (udpCb) udpCb.addEventListener('change', () => {
+    node.config.udp_enabled = udpCb.checked;
+    document.getElementById('udpFields').style.display = udpCb.checked ? 'block' : 'none';
+    renderNode(node);
+  });
+  if (snapCb) snapCb.addEventListener('change', () => {
+    node.config.send_snapshot = snapCb.checked;
+    renderNode(node);
+  });
+  if (popupCb) popupCb.addEventListener('change', () => {
+    node.config.popup_enabled = popupCb.checked;
+    renderNode(node);
+  });
+
+  // Populate the camera dropdown for detection node
+  (async () => {
+    const camSel = document.getElementById('cfg-camera_index');
+    if (!camSel) return;
+    const raw = await fetch('/api/cameras').then(r=>r.json()).catch(()=>[]);
+
+    const rawList = Array.isArray(raw) ? raw : (raw?.cameras || []);
+    const cameras = rawList.map(c => typeof c === 'object'
+      ? { idx: c.index ?? 0, name: c.name || `カメラ ${c.index ?? 0}` }
+      : { idx: c, name: `カメラ ${c}` });
+    camSel.innerHTML = '';
+    if (!cameras.length) {
+      camSel.innerHTML = '<option value="0">カメラ 0 (デフォルト)</option>';
+      return;
+    }
+    cameras.forEach(({ idx, name }) => {
+      const o = document.createElement('option');
+      o.value = idx;
+      o.textContent = cameras.length === 1 ? `${name} (唯一のカメラ)` : name;
+      if (String(idx) === String(node.config.camera_index ?? 0)) o.selected = true;
+      camSel.appendChild(o);
+    });
+    // Persist camera_name alongside index so nodeSummary can display it
+    camSel.addEventListener('change', () => {
+      const sel = camSel.options[camSel.selectedIndex];
+      node.config.camera_name = sel ? sel.textContent.replace(' (唯一のカメラ)', '') : '';
+      renderNode(node);
+    });
+    // Set initial camera_name
+    const selOpt = camSel.options[camSel.selectedIndex];
+    if (selOpt) node.config.camera_name = selOpt.textContent.replace(' (唯一のカメラ)', '');
+  })();
+
+  // Populate the model dropdown
+  (async () => {
+    const sel = document.getElementById('cfg-model-select');
+    if (!sel) return;
+    // /api/models returns a plain string array ["model.pt", ...]
+    const r = await fetch('/api/models').then(r=>r.json()).catch(()=>null);
+    const names = Array.isArray(r) ? r : (r?.models || []).map(m => m.name || m);
+    names.forEach(name => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      if (name === (node.config.model||'')) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  })();
+
+  // Load selected model from models folder, then populate classes dropdown
+  document.getElementById('btnLoadModel')?.addEventListener('click', async () => {
+    const sel = document.getElementById('cfg-model-select');
+    const modelName = sel?.value || '';
+    if (!modelName) { alert('ドロップダウンからモデルを選択してください。'); return; }
+    const btn = document.getElementById('btnLoadModel');
+    btn.textContent = '読み込み中…'; btn.disabled = true;
+    const lr = await api('/api/load_model', 'POST', { model_name: modelName }).catch(()=>null);
+    btn.textContent = '↓ 選択されたモデルとクラスを読み込む'; btn.disabled = false;
+    if (!lr || !lr.success) {
+      alert('モデルの読み込みに失敗しました: ' + (lr?.error || 'unknown error')); return;
+    }
+    node.config.model = modelName;
+    const allClasses = lr.classes || lr.model_info?.classes || [];
+    node.config.availableClasses = allClasses;
+    node.config.classes = [];   // reset selection when a new model is loaded
+
+    // Repopulate the dropdown in-place (no full panel re-render needed)
+    const dd = document.getElementById('classesDropdown');
+    const hint = document.getElementById('classesHint');
+    if (dd) {
+      dd.innerHTML = allClasses.map(cl =>
+        `<option value="${esc(cl)}">${esc(cl)}</option>`
+      ).join('');
+    }
+    if (hint) hint.textContent = 'Ctrl/Cmd+click で複数選択できます。未選択 = すべてのクラスを検出。';
+    renderNode(node);
+  });
+
+  // Sync dropdown selection → node.config.classes (shared by detection + bilt_detection)
+  document.getElementById('classesDropdown')?.addEventListener('change', () => {
+    const dd = document.getElementById('classesDropdown');
+    node.config.classes = Array.from(dd.selectedOptions).map(o => o.value);
+    renderNode(node);
+  });
+
+  // ── BILT model dropdown ──────────────────────────────────────────────────
+  (async () => {
+    const sel = document.getElementById('cfg-bilt-model-select');
+    if (!sel) return;
+    const r = await fetch('/api/bilt/models').then(r=>r.json()).catch(()=>null);
+    const models = r?.models || [];
+    models.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.name || m;
+      opt.textContent = m.name || m;
+      if ((m.name || m) === (node.config.model||'')) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  })();
+
+  // Load selected BILT model, populate classes
+  document.getElementById('btnLoadBiltModel')?.addEventListener('click', async () => {
+    const sel = document.getElementById('cfg-bilt-model-select');
+    const modelName = sel?.value || '';
+    if (!modelName) { alert('ドロップダウンからBILTモデルを選択してください。'); return; }
+    const btn = document.getElementById('btnLoadBiltModel');
+    btn.textContent = '読み込み中…'; btn.disabled = true;
+    const lr = await api('/api/bilt/model/load', 'POST', { model_name: modelName }).catch(()=>null);
+    btn.textContent = '↓ 選択したモデルをロード & クラス'; btn.disabled = false;
+    if (!lr || !lr.success) {
+      alert('BILTモデルの読み込みに失敗しました: ' + (lr?.error || 'unknown error')); return;
+    }
+    node.config.model = modelName;
+    const allClasses = lr.model_info?.classes || [];
+    node.config.availableClasses = allClasses;
+    node.config.classes = [];
+    const dd = document.getElementById('classesDropdown');
+    const hint = document.getElementById('classesHint');
+    if (dd) {
+      dd.innerHTML = allClasses.map(cl =>
+        `<option value="${esc(cl)}">${esc(cl)}</option>`
+      ).join('');
+    }
+    if (hint) hint.textContent = 'Ctrl/Cmd+click で複数選択できます。未選択 = すべてのクラスを検出。';
+    renderNode(node);
+  });
+
+  document.getElementById('btnPropsDel')?.addEventListener('click', () => {
+    deleteNode(node.id);
+  });
+}
+
+function chipHtml(cls) {
+  return `<div class="class-chip">${esc(cls)}<button data-rm-class="${esc(cls)}">×</button></div>`;
+}
+function field(lbl, inner, hint='') {
+  return `<div class="field"><label>${lbl}</label>${inner}${hint?`<p class="field-hint">${hint}</p>`:''}</div>`;
+}
+function opt(val, lbl, sel) {
+  return `<option value="${val}" ${sel===val?'selected':''}>${lbl}</option>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Toolbar actions
+// ══════════════════════════════════════════════════════════════════════════════
+document.getElementById('btnNew').addEventListener('click', () => {
+  if (!state.nodes.length || confirm('キャンバスから新しいワークフローを開始しますか?')) {
+    state.nodes = [];
+    state.edges = [];
+    state.selectedId = null;
+    state.wfName = 'Untitled';
+    document.getElementById('wfName').textContent = 'Untitled';
+    document.getElementById('nodeLayer').innerHTML = '';
+    renderEdges();
+    showProps(null);
+  }
+});
+
+document.getElementById('btnSave').addEventListener('click', () => {
+  document.getElementById('saveNameInput').value = state.wfName !== 'Untitled' ? state.wfName : '';
+  openModal('modalSave');
+});
+document.getElementById('btnSaveConfirm').addEventListener('click', async () => {
+  const name = document.getElementById('saveNameInput').value.trim();
+  if (!name) { alert('ワークフロー名を入力してください。'); return; }
+  const wf = { name, nodes: state.nodes, edges: state.edges };
+  const r = await api('/api/workflows/save', 'POST', { name, workflow: wf });
+  if (r.success) {
+    state.wfName = name;
+    document.getElementById('wfName').textContent = name;
+    closeModal('modalSave');
+    toast('保存完了: ' + name);
+  } else alert('保存に失敗しました: ' + (r.error || '?'));
+});
+document.getElementById('btnSaveCancel').addEventListener('click', () => closeModal('modalSave'));
+
+document.getElementById('btnLoad').addEventListener('click', async () => {
+  const r = await api('/api/workflows/saved');
+  const list = document.getElementById('loadList');
+  if (!r.success || !r.workflows?.length) {
+    list.innerHTML = '<p style="color:var(--muted);font-size:13px;padding:8px">保存されたワークフローがありません。</p>';
+  } else {
+    list.innerHTML = r.workflows.map(w => `
+      <div class="wf-modal-item" data-wname="${esc(w.filename)}">
+        <div>
+          <div>${esc(w.name)}</div>
+          <div class="wf-modal-item-meta">${w.node_count} ノード · ${w.created ? w.created.slice(0,10) : ''}</div>
+        </div>
+        <button class="wf-modal-item-del" data-del-wf="${esc(w.filename)}">×</button>
+      </div>`).join('');
+    list.querySelectorAll('.wf-modal-item').forEach(item => {
+      item.addEventListener('click', async e => {
+        if (e.target.dataset.delWf) return;
+        const r2 = await api('/api/workflows/load_file', 'POST', { name: item.dataset.wname });
+        if (r2.success && r2.workflow) {
+          const wf = r2.workflow;
+          state.nodes = wf.nodes || [];
+          state.edges = wf.edges || [];
+          state.wfName = wf.name || item.dataset.wname;
+          document.getElementById('wfName').textContent = state.wfName;
+          document.getElementById('nodeLayer').innerHTML = '';
+          renderAll();
+          closeModal('modalLoad');
+          toast('読み込み完了: ' + state.wfName);
+        } else alert('読み込みに失敗しました: ' + (r2.error || '?'));
+      });
+    });
+    list.querySelectorAll('[data-del-wf]').forEach(btn => {
+      btn.addEventListener('click', async e => {
+        e.stopPropagation();
+        if (!confirm('ワークフロー "' + btn.dataset.delWf + '" を削除しますか?')) return;
+        const dr = await api('/api/workflows/delete', 'POST', { name: btn.dataset.delWf });
+        if (dr.success) btn.closest('.wf-modal-item').remove();
+        else alert('削除に失敗しました: ' + (dr.error || '?'));
+      });
+    });
+  }
+  openModal('modalLoad');
+});
+document.getElementById('btnLoadCancel').addEventListener('click', () => closeModal('modalLoad'));
+
+document.getElementById('btnExport').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify({ name: state.wfName, nodes: state.nodes,
+    edges: state.edges }, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (state.wfName || 'workflow') + '.json';
+  a.click();
+});
+
+// ── Run / Stop / Resume ───────────────────────────────────────────────────────
+document.getElementById('btnRun').addEventListener('click', async () => {
+  // ── Pre-flight validation ─────────────────────────────────────────────────
+  // BILT detection nodes require a model to be assigned
+  const biltNodesNeedModel = state.nodes.filter(n => n.type === 'bilt_detection' && !n.config?.model);
+  if (biltNodesNeedModel.length) {
+    alert('一部のBILT Detectionノードにモデルが割り当てられていません。\n各BILT Detectionノードでモデルを選択してロードしてください。');
+    return;
+  }
+
+  const allDetectionNodes = state.nodes.filter(n => n.type === 'bilt_detection');
+  if (allDetectionNodes.length === 0) {
+    alert('ワークフローに検出ノードがありません。実行する前に、少なくとも1つの検出ノードを追加してください。');
+    return;
+  }
+  const missingClasses = allDetectionNodes.filter(n => !(n.config?.classes?.length));
+  if (missingClasses.length) {
+    const labels = missingClasses.map(n => n.config?.label || n.type).join(', ');
+    alert(`以下の検出ノードにターゲットクラスが選択されていません:\n  ${labels}\n\n実行する前に各検出ノードで少なくとも1つのクラスを選択してください。`);
+    return;
+  }
+  // ── Start ─────────────────────────────────────────────────────────────────
+  const graph = { name: state.wfName, nodes: state.nodes, edges: state.edges };
+  const r = await api('/api/workflow/start', 'POST', { graph });
+  if (r.success) {
+    startStatusPolling();
+    // Camera feed is started by pollStatus() once camera_active becomes true on the backend
+  } else {
+    alert('開始に失敗しました: ' + (r.error || 'unknown'));
+  }
+});
+
+document.getElementById('btnStop').addEventListener('click', async () => {
+  await api('/api/workflow/stop', 'POST', {});
+  stopStatusPolling();
+  updateStatusUI('idle');
+  _monitorForceStop?.();
+});
+
+document.getElementById('btnResume').addEventListener('click', async () => {
+  await api('/api/workflow/resume', 'POST', {});
+});
+
+document.getElementById('btnClearLog').addEventListener('click', () => {
+  document.getElementById('logEntries').innerHTML = '';
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Status polling
+// ══════════════════════════════════════════════════════════════════════════════
+let _lastLogCount = 0;
+function startStatusPolling() {
+  if (state.statusInterval) return;
+  state.statusInterval = setInterval(pollStatus, 800);
+}
+function stopStatusPolling() {
+  clearInterval(state.statusInterval);
+  state.statusInterval = null;
+}
+
+async function pollStatus() {
+  const r = await api('/api/workflow/status').catch(() => null);
+  if (!r || !r.success) return;
+  const wf = r.workflow;
+  updateStatusUI(wf.status, wf.current_node_id);
+
+  // Camera feed: start only when backend signals detection is live (model loaded + camera open)
+  // and stop immediately when detection for that node finishes.
+  if (wf.camera_active) {
+    const node = state.nodes.find(n => n.id === wf.current_node_id);
+    _monitorForceStart?.(node?.config?.camera_index);
+  } else {
+    _monitorForceStop?.();
+  }
+
+  // Append new log entries
+  const entries = wf.log || [];
+  if (entries.length > _lastLogCount) {
+    const newOnes = entries.slice(_lastLogCount);
+    _lastLogCount = entries.length;
+    const logEl = document.getElementById('logEntries');
+    newOnes.forEach(e => {
+      const div = document.createElement('div');
+      div.className = 'log-entry ' + (e.level || 'info');
+      div.innerHTML = `<span class="le-time">${e.time}</span><span class="le-msg">${esc(e.msg)}</span>`;
+      logEl.appendChild(div);
+    });
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  if (wf.status === 'completed' || wf.status === 'error') {
+    stopStatusPolling();
+  }
+}
+
+function updateStatusUI(status, activeNodeId) {
+  state.wfStatus = status;
+  const badge = document.getElementById('statusBadge');
+  badge.className = 'wf-status-badge ' + status;
+  const labels = { idle:'Idle', running:'起動中g', paused:'停止中',
+                   completed:'完了', error:'エラー' };
+  badge.textContent = labels[status] || status;
+
+  document.getElementById('btnRun').disabled    = status === 'running';
+  document.getElementById('btnStop').disabled   = status === 'idle' || status === 'completed';
+  document.getElementById('btnResume').style.display = status === 'paused' ? 'inline-flex' : 'none';
+
+  // Highlight active node
+  state.nodes.forEach(n => {
+    document.getElementById('node-' + n.id)?.classList.toggle(
+      'active-node', n.id === activeNodeId && status === 'running'
+    );
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Live monitor (camera + detections)
+// Supports both:
+//   • Manual mode  – user picks a camera and starts detection normally
+//   • Workflow mode – uses dedicated per-camera streams started by the workflow;
+//                     auto-switches to the camera of the currently active node
+// ══════════════════════════════════════════════════════════════════════════════
+let _monitorForceStop  = null; // set by startMonitor() — call to immediately kill camera feed
+let _monitorForceStart = null; // set by startMonitor() — call to immediately enter workflow monitor mode
+function startMonitor() {
+  const img      = document.getElementById('monitorImg');
+  const btn      = document.getElementById('monitorStartBtn');
+  const sel      = document.getElementById('monitorCameraSelect');
+  const statusEl = document.getElementById('monitorStatus');
+
+  let cameraRunning  = false;
+  let frameTimer     = null;
+  let wfMonitorCam   = null;  // camera_index to show when in workflow mode
+  let wfMode         = false; // true when workflow streams are active
+
+  // ── Populate camera selector ───────────────────────────────────────────────
+  async function loadCameras() {
+    const raw     = await fetch('/api/cameras').then(r=>r.json()).catch(()=>[]);
+    const rawList = Array.isArray(raw) ? raw : (raw?.cameras || []);
+    const cameras = rawList.map(c => typeof c === 'object'
+      ? { idx: c.index ?? 0, name: c.name || `カメラ ${c.index ?? 0}` }
+      : { idx: c, name: `カメラ ${c}` });
+    sel.innerHTML = '';
+    if (!cameras.length) {
+      sel.innerHTML = '<option value="">カメラがありません</option>';
+      return;
+    }
+    cameras.forEach(({ idx, name }) => {
+      const o = document.createElement('option');
+      o.value = idx;
+      o.textContent = name;
+      sel.appendChild(o);
+    });
+  }
+  loadCameras();
+
+  // ── Frame scheduler ────────────────────────────────────────────────────────
+  function currentFrameUrl() {
+    // When the workflow has running streams, use the per-camera endpoint
+    if (wfMode && wfMonitorCam != null)
+      return `/api/workflow/camera_frame/${wfMonitorCam}?t=${Date.now()}`;
+    return '/api/workflow/frame?t=' + Date.now();
+  }
+
+  function scheduleFrame() {
+    if (!cameraRunning) return;
+    img.src = currentFrameUrl();
+  }
+  img.onload  = () => { if (cameraRunning) frameTimer = setTimeout(scheduleFrame, 250); };
+  img.onerror = () => { if (cameraRunning) frameTimer = setTimeout(scheduleFrame, 1000); };
+
+  // ── Status helper ──────────────────────────────────────────────────────────
+  function setStatus(running) {
+    cameraRunning = running;
+    if (running) {
+      statusEl.textContent = '● Camera active';
+      statusEl.style.color = '#4ade80';
+      btn.textContent = '■ 停止';
+      btn.style.background = '#7f1d1d';
+      btn.style.color = '#fca5a5';
+      scheduleFrame();
+    } else {
+      statusEl.textContent = '● Camera off';
+      statusEl.style.color = '';
+      btn.textContent = '▶ 開始';
+      btn.style.background = '#166534';
+      btn.style.color = '#bbf7d0';
+      if (frameTimer) { clearTimeout(frameTimer); frameTimer = null; }
+      img.src = '';
+    }
+  }
+
+  // Expose hooks so workflow start/stop buttons can control the monitor directly
+  _monitorForceStop  = () => {
+    wfMode = false;
+    wfMonitorCam = null;
+    if (cameraRunning) setStatus(false);
+  };
+  _monitorForceStart = (camIdx) => {
+    if (camIdx != null && camIdx !== undefined) {
+      // Dedicated camera stream — use per-camera frame endpoint
+      wfMode = true;
+      wfMonitorCam = Number(camIdx);
+      const camName = `カメラ ${camIdx}`;
+      statusEl.textContent = `● ${camName}`;
+      if (!sel.querySelector(`option[value="${camIdx}"]`)) {
+        const o = document.createElement('option');
+        o.value = camIdx;
+        o.textContent = camName;
+        sel.appendChild(o);
+      }
+      sel.value = camIdx;
+    } else {
+      // Global detection loop — use /api/workflow/frame (wfMode stays false)
+      wfMode = false;
+      wfMonitorCam = null;
+      statusEl.textContent = '● 検出中…';
+    }
+    if (!cameraRunning) setStatus(true);
+  };
+
+  // ── Manual start/stop button ───────────────────────────────────────────────
+  btn.addEventListener('click', async () => {
+    if (cameraRunning) {
+      if (!wfMode) await api('/api/stop_detection', 'POST');
+      setStatus(false);
+      return;
+    }
+    const camVal = sel.value;
+    btn.textContent = '開始中…'; btn.disabled = true;
+    const camIdx = isNaN(Number(camVal)) ? camVal : (parseInt(camVal) || 0);
+    const selR = await api('/api/select_camera', 'POST', { camera_index: camIdx });
+    if (!selR.success) {
+      toast('カメラ選択に失敗しました: ' + (selR.error||''));
+      btn.disabled = false; setStatus(false); return;
+    }
+    const startR = await api('/api/start_detection', 'POST');
+    btn.disabled = false;
+    if (!startR.success) {
+      toast('開始に失敗しました: ' + (startR.error||''));
+      setStatus(false); return;
+    }
+    setStatus(true);
+  });
+
+  // ── Detection labels polling ───────────────────────────────────────────────
+  setInterval(async () => {
+    if (!cameraRunning) return;
+    const el = document.getElementById('monitorDets');
+
+    if (wfMode && wfMonitorCam != null) {
+      // Show detections from the active workflow stream
+      const r = await fetch('/api/workflow/streams').then(r=>r.json()).catch(()=>null);
+      const stream = r?.streams?.find(s => s.camera_index === wfMonitorCam);
+      if (!stream) { el.innerHTML = '<span style="color:var(--muted)">検出なし</span>'; return; }
+      // Fetch detections via the global endpoint filtered to active node's camera
+      const dr = await fetch('/api/workflow/detections').then(r=>r.json()).catch(()=>null);
+      if (!dr?.detections?.length) {
+        el.innerHTML = `<span style="color:var(--muted)">カメラ${wfMonitorCam} — ${stream.fps} fps</span>`;
+        return;
+      }
+      const counts = {};
+      dr.detections.forEach(d => { counts[d.class_name] = (counts[d.class_name]||0)+1; });
+      el.innerHTML = `<span style="color:var(--muted);font-size:10px">カメラ${wfMonitorCam}</span> ` +
+        Object.entries(counts).map(([cls,n]) => `<span class="det-chip">${esc(cls)} ×${n}</span>`).join('');
+      return;
+    }
+
+    const r = await fetch('/api/workflow/detections').then(r=>r.json()).catch(()=>null);
+    if (!r || !r.success || !r.detections?.length) {
+      el.innerHTML = '<span style="color:var(--muted)">検出なし</span>';
+      return;
+    }
+    const counts = {};
+    r.detections.forEach(d => { counts[d.class_name] = (counts[d.class_name]||0)+1; });
+    el.innerHTML = Object.entries(counts)
+      .map(([cls,n]) => `<span class="det-chip">${esc(cls)} ×${n}</span>`)
+      .join('');
+  }, 600);
+
+  // ── Workflow stream camera-follow ─────────────────────────────────────────
+  // When dedicated per-camera streams are active, follow the executing node's camera.
+  // Feed start/stop is handled by pollStatus() via the camera_active flag.
+  setInterval(async () => {
+    const streamsR = await fetch('/api/workflow/streams').then(r=>r.json()).catch(()=>null);
+    const streams  = streamsR?.streams || [];
+    wfMode = streams.length > 0;
+
+    if (!wfMode || !cameraRunning) return;
+
+    // Follow the camera of the currently executing node
+    const statusR = await fetch('/api/workflow/status').then(r=>r.json()).catch(()=>null);
+    const nodeId  = statusR?.current_node_id;
+    if (!nodeId) return;
+    const node = state.nodes.find(n => n.id === nodeId);
+    const nodeCam = node?.config?.camera_index;
+    if (nodeCam != null && streams.find(s => s.camera_index === Number(nodeCam))) {
+      if (wfMonitorCam !== Number(nodeCam)) {
+        wfMonitorCam = Number(nodeCam);
+        const camName = node.config.camera_name || `cam${nodeCam}`;
+        statusEl.textContent = `● ${camName}`;
+        // Rebuild the selector to add workflow streams if not already listed
+        if (!sel.querySelector(`option[value="${nodeCam}"]`)) {
+          const o = document.createElement('option');
+          o.value = nodeCam;
+          o.textContent = camName;
+          sel.appendChild(o);
+        }
+        sel.value = nodeCam;
+      }
+    }
+  }, 1000);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Utilities
+// ══════════════════════════════════════════════════════════════════════════════
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                  .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+async function api(url, method='GET', body=null) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  try {
+    const r = await fetch(url, opts);
+    return await r.json();
+  } catch (e) {
+    return { success: false, error: String(e) };
+  }
+}
+
+function toast(msg) {
+  const t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:140px;right:16px;background:#166534;color:#bbf7d0;'+
+    'padding:8px 14px;border-radius:8px;font-size:13px;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.5);';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+
+// Close modals on overlay click
+document.querySelectorAll('.wf-modal-overlay').forEach(o => {
+  o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Init
+// ══════════════════════════════════════════════════════════════════════════════
+applyTransform();
+startMonitor();
+// Poll status once on load: restore if workflow was already running, else reset camera state
+pollStatus().then(() => {
+  if (state.wfStatus === 'running' || state.wfStatus === 'paused') {
+    startStatusPolling();
+  } else {
+    fetch('/api/detection/reset', { method: 'POST' }).catch(() => {});
+  }
+});
+
+// ── Browser popup alert system ────────────────────────────────────────────────
+let _popupAlertSince = null;   // null = not yet initialised (skip stale alerts)
+
+async function initPopupFeed() {
+  try {
+    const r = await fetch('/api/alert_feed');
+    const d = await r.json();
+    _popupAlertSince = d.total ?? 0;   // mark current alerts as already seen
+  } catch { _popupAlertSince = 0; }
+}
+
+async function pollPopupFeed() {
+  if (_popupAlertSince === null) return;
+  try {
+    const r = await fetch('/api/alert_feed?since=' + _popupAlertSince);
+    const d = await r.json();
+    const alerts = d.alerts || [];
+    if (alerts.length) {
+      _popupAlertSince = d.total;
+      // Show only the latest popup-enabled alert (avoid stacking)
+      const popups = alerts.filter(a => a.popup);
+      if (popups.length) showAlertPopup(popups[popups.length - 1]);
+    }
+  } catch { /* network hiccup — ignore */ }
+}
+
+function showAlertPopup(alert) {
+  // Remove any existing popup first
+  document.getElementById('wf-alert-popup')?.remove();
+
+  const snap = alert.frame_snapshot;
+  const overlay = document.createElement('div');
+  overlay.id = 'wf-alert-popup';
+  overlay.style.cssText = `
+    position:fixed; inset:0; z-index:9999;
+    background:rgba(0,0,0,.75); backdrop-filter:blur(4px);
+    display:flex; align-items:center; justify-content:center;
+    animation:wf-pop-in .2s ease;
+  `;
+  overlay.innerHTML = `
+    <style>
+      @keyframes wf-pop-in { from{opacity:0;transform:scale(.93)} to{opacity:1;transform:none} }
+      #wf-alert-popup .popup-card {
+        background:var(--surface); border:2px solid #f97316; border-radius:14px;
+        max-width:560px; width:90%; padding:28px 28px 22px;
+        box-shadow:0 25px 60px rgba(0,0,0,.7);
+        display:flex; flex-direction:column; gap:16px;
+      }
+      #wf-alert-popup .popup-icon { font-size:40px; text-align:center; }
+      #wf-alert-popup .popup-title {
+        font-size:11px; font-weight:700; letter-spacing:.1em;
+        text-transform:uppercase; color:#f97316; text-align:center;
+      }
+      #wf-alert-popup .popup-msg {
+        font-size:20px; font-weight:700; color:#e2e8f0;
+        text-align:center; line-height:1.4;
+      }
+      #wf-alert-popup .popup-meta {
+        font-size:11px; color:#64748b; text-align:center;
+      }
+      #wf-alert-popup .popup-snap img {
+        width:100%; border-radius:8px; border:1px solid #334155;
+        display:block;
+      }
+      #wf-alert-popup .popup-dismiss {
+        width:100%; padding:11px 0; border-radius:8px; font-size:14px;
+        font-weight:700; cursor:pointer; border:none;
+        background:#f97316; color:#fff; transition:background .15s;
+      }
+      #wf-alert-popup .popup-dismiss:hover { background:#ea6c0a; }
+    </style>
+    <div class="popup-card">
+      <div class="popup-icon">⚠️</div>
+      <div class="popup-title">ワークフローアラート</div>
+      <div class="popup-msg">${esc(alert.message || 'Alert triggered')}</div>
+      <div class="popup-meta">
+        ${new Date(alert.timestamp).toLocaleString()} &nbsp;·&nbsp; ソース: ${esc(alert.source || 'workflow')}
+      </div>
+      ${snap ? `<div class="popup-snap"><img src="data:image/jpeg;base64,${snap}" alt="Detection snapshot"></div>` : ''}
+      <button class="popup-dismiss" id="wf-popup-dismiss">Dismiss</button>
+    </div>`;
+
+  document.body.appendChild(overlay);
+  document.getElementById('wf-popup-dismiss').addEventListener('click', () => overlay.remove());
+  // Also dismiss on overlay click outside the card
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
+initPopupFeed();
+setInterval(pollPopupFeed, 2000);
+</script>
+{% endblock %}{# scripts #}

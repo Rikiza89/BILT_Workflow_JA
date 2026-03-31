@@ -1,0 +1,1396 @@
+{% extends "base.html" %}
+
+{% block title %}ヘルプ - BILT Workflow{% endblock %}
+
+{% block head %}
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   CSS変数 — テーマ対応のベース変数定義
+   light / dark 両モードで機能するよう設計
+   ═══════════════════════════════════════════════════════════════ */
+:root {
+  --bilt-purple:        #7c3aed;
+  --bilt-purple-dim:    rgba(124, 58, 237, 0.12);
+  --bilt-purple-border: rgba(124, 58, 237, 0.45);
+  --bilt-blue:          #2563eb;
+  --bilt-blue-dim:      rgba(37, 99, 235, 0.10);
+
+  /* ツールチップ用変数 */
+  --tip-bg:    #1e1b4b;
+  --tip-text:  #e0e7ff;
+  --tip-border: rgba(124, 58, 237, 0.6);
+
+  /* アーキテクチャブロック */
+  --arch-bg:   rgba(0, 0, 0, 0.35);
+  --arch-text: #a5f3fc;
+
+  /* テーブルバリアント着色 — opacityベースでdark対応 */
+  --row-success-bg: rgba(34, 197, 94, 0.12);
+  --row-success-border: rgba(34, 197, 94, 0.35);
+  --row-primary-bg: rgba(59, 130, 246, 0.12);
+  --row-primary-border: rgba(59, 130, 246, 0.35);
+  --row-danger-bg:  rgba(239, 68, 68, 0.12);
+  --row-danger-border: rgba(239, 68, 68, 0.35);
+
+  /* アラート — Bootstrap上書き用 */
+  --alert-info-bg:    rgba(14, 165, 233, 0.10);
+  --alert-info-border: rgba(14, 165, 233, 0.40);
+  --alert-info-text:   #7dd3fc;
+  --alert-success-bg:    rgba(34, 197, 94, 0.10);
+  --alert-success-border: rgba(34, 197, 94, 0.40);
+  --alert-success-text:   #86efac;
+  --alert-warning-bg:    rgba(245, 158, 11, 0.10);
+  --alert-warning-border: rgba(245, 158, 11, 0.40);
+  --alert-warning-text:   #fcd34d;
+  --alert-secondary-bg:    rgba(148, 163, 184, 0.10);
+  --alert-secondary-border: rgba(148, 163, 184, 0.30);
+  --alert-secondary-text:   #cbd5e1;
+
+  /* アコーディオン — ボタン色はCSSルールで直接指定 */
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   サイドバーナビゲーション
+   ═══════════════════════════════════════════════════════════════ */
+.help-sidebar { position: sticky; top: 1rem; }
+.help-sidebar .nav-link {
+  color: var(--muted, #94a3b8);
+  padding: .3rem .75rem;
+  font-size: .8125rem;
+  letter-spacing: .01em;
+  border-left: 2px solid transparent;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.help-sidebar .nav-link:hover {
+  color: var(--accent, #818cf8);
+  background: var(--bilt-blue-dim);
+  border-radius: 0 .375rem .375rem 0;
+  border-left-color: var(--bilt-blue);
+}
+.help-sidebar .nav-link.active {
+  color: var(--bilt-purple, #7c3aed);
+  background: var(--bilt-purple-dim);
+  border-radius: 0 .375rem .375rem 0;
+  border-left-color: var(--bilt-purple);
+  font-weight: 600;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   セクション共通
+   ═══════════════════════════════════════════════════════════════ */
+.help-section { scroll-margin-top: 5rem; }
+
+/* ═══════════════════════════════════════════════════════════════
+   バッジ
+   ═══════════════════════════════════════════════════════════════ */
+.badge-bilt {
+  background: var(--bilt-purple);
+  color: #fff;
+  font-size: .7rem;
+  letter-spacing: .05em;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   コードスタイル — dark対応
+   ═══════════════════════════════════════════════════════════════ */
+code {
+  background: rgba(148, 163, 184, 0.13);
+  color: #f59e0b;
+  padding: .1rem .35rem;
+  border-radius: .25rem;
+  font-size: .85em;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   アーキテクチャ図 — ダークテーマ強制
+   ═══════════════════════════════════════════════════════════════ */
+.arch-block {
+  background: var(--arch-bg);
+  color: var(--arch-text);
+  border: 1px solid rgba(165, 243, 252, 0.2);
+  border-radius: .5rem;
+  padding: 1rem 1.25rem;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: .8rem;
+  line-height: 1.8;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BILTカードヘッダー — CSS変数で統一
+   ═══════════════════════════════════════════════════════════════ */
+.card-bilt {
+  border-color: var(--bilt-purple-border) !important;
+}
+.card-bilt > .card-header {
+  background: var(--bilt-purple-dim) !important;
+  border-bottom-color: var(--bilt-purple-border) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ステップ番号バッジ
+   ═══════════════════════════════════════════════════════════════ */
+.step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--bilt-purple);
+  color: #fff;
+  font-weight: 700;
+  flex-shrink: 0;
+  font-size: .875rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   バリアントテーブル — opacity着色でdark対応
+   ═══════════════════════════════════════════════════════════════ */
+.variant-table th {
+  background: rgba(148, 163, 184, 0.12) !important;
+  color: inherit;
+}
+.variant-table .row-spark  { background: var(--row-success-bg);  border-left: 3px solid #22c55e; }
+.variant-table .row-flash  { background: transparent; }
+.variant-table .row-core   { background: var(--row-primary-bg);  border-left: 3px solid #3b82f6; }
+.variant-table .row-pro    { background: transparent; }
+.variant-table .row-max    { background: var(--row-danger-bg);   border-left: 3px solid #ef4444; }
+
+/* Bootstrapテーブルクラス上書き — dark対応 */
+.table-success { background-color: var(--row-success-bg) !important; color: inherit !important; }
+.table-primary { background-color: var(--row-primary-bg) !important; color: inherit !important; }
+.table-danger  { background-color: var(--row-danger-bg)  !important; color: inherit !important; }
+.table-dark    { background-color: rgba(15, 23, 42, 0.7) !important; }
+
+/* ═══════════════════════════════════════════════════════════════
+   Bootstrapアラート全面上書き — dark対応
+   ═══════════════════════════════════════════════════════════════ */
+.alert {
+  border-width: 1px;
+  border-style: solid;
+}
+.alert-info {
+  background-color: var(--alert-info-bg) !important;
+  border-color: var(--alert-info-border) !important;
+  color: var(--alert-info-text) !important;
+}
+.alert-success {
+  background-color: var(--alert-success-bg) !important;
+  border-color: var(--alert-success-border) !important;
+  color: var(--alert-success-text) !important;
+}
+.alert-warning {
+  background-color: var(--alert-warning-bg) !important;
+  border-color: var(--alert-warning-border) !important;
+  color: var(--alert-warning-text) !important;
+}
+.alert-secondary {
+  background-color: var(--alert-secondary-bg) !important;
+  border-color: var(--alert-secondary-border) !important;
+  color: var(--alert-secondary-text) !important;
+}
+/* アラート内のstrongはテキスト色を継承 */
+.alert strong { color: inherit; opacity: .95; }
+.alert code   { background: rgba(255,255,255,.08); color: #fde68a; }
+
+/* ═══════════════════════════════════════════════════════════════
+   アコーディオン — dark対応
+   --bs-body-color に依存しない明示的な色指定
+   ═══════════════════════════════════════════════════════════════ */
+.accordion-item {
+  background: transparent !important;
+  border-color: rgba(148, 163, 184, 0.25) !important;
+}
+.accordion-button {
+  background: rgba(148, 163, 184, 0.08) !important;
+  /* var(--text) が定義されていればそれを使い、なければ明るいグレーに */
+  color: var(--text, #e2e8f0) !important;
+  box-shadow: none !important;
+  font-weight: 500;
+  border-radius: 0 !important;
+}
+.accordion-button:not(.collapsed) {
+  background: var(--bilt-purple-dim) !important;
+  color: #c4b5fd !important;
+  border-bottom: 1px solid var(--bilt-purple-border);
+}
+/* チェブロンを常に視認できるようにフィルタ調整 */
+.accordion-button::after {
+  filter: brightness(0) invert(1) opacity(.7);
+}
+.accordion-button:not(.collapsed)::after {
+  filter: brightness(0) saturate(100%) invert(68%) sepia(60%)
+          saturate(500%) hue-rotate(220deg) brightness(110%);
+}
+.accordion-body {
+  background: rgba(0, 0, 0, 0.15) !important;
+  color: var(--text, #e2e8f0) !important;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+/* アコーディオンボディ内のテーブルも読みやすく */
+.accordion-body .table {
+  color: var(--text, #e2e8f0) !important;
+}
+.accordion-body code {
+  background: rgba(148, 163, 184, 0.15);
+  color: #f59e0b;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ツールチップ — ホバー時の初心者向け解説
+   position:fixed + JS制御でテーブルのスタッキングコンテキスト問題を回避
+   ═══════════════════════════════════════════════════════════════ */
+[data-tip] {
+  cursor: help;
+  text-decoration: underline dotted rgba(124, 58, 237, 0.55);
+  text-underline-offset: 3px;
+}
+/* JS駆動ツールチップ本体 — body直下に単一要素として配置 */
+#bilt-tooltip {
+  position: fixed;
+  background: var(--tip-bg);
+  color: var(--tip-text);
+  border: 1px solid var(--tip-border);
+  border-radius: .5rem;
+  padding: .6rem .85rem;
+  font-size: .75rem;
+  font-weight: 400;
+  line-height: 1.55;
+  white-space: normal;
+  width: 260px;
+  max-width: 90vw;
+  box-shadow: 0 10px 30px rgba(0,0,0,.6);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .15s;
+  z-index: 99999;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   データセットレイアウト図
+   ═══════════════════════════════════════════════════════════════ */
+.dir-tree {
+  background: rgba(0,0,0,.3);
+  border: 1px solid rgba(148,163,184,.2);
+  border-radius: .5rem;
+  padding: 1rem 1.25rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: .8rem;
+  color: #94a3b8;
+  line-height: 2;
+}
+.dir-tree .dir  { color: #7dd3fc; }
+.dir-tree .file { color: #86efac; }
+.dir-tree .note { color: #64748b; }
+
+/* ═══════════════════════════════════════════════════════════════
+   パラメータテーブル — デフォルト列の強調
+   ═══════════════════════════════════════════════════════════════ */
+.param-table td:nth-child(2) code {
+  color: #6ee7b7;
+}
+.param-table thead th {
+  background: rgba(148,163,184,.1) !important;
+  color: inherit;
+  font-size: .8rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ノードバッジ（ワークフロー）
+   ═══════════════════════════════════════════════════════════════ */
+.badge-purple { background: var(--bilt-purple) !important; color: #fff !important; }
+
+/* ═══════════════════════════════════════════════════════════════
+   セクション区切り線
+   ═══════════════════════════════════════════════════════════════ */
+.section-divider {
+  border: none;
+  border-top: 1px solid rgba(148,163,184,.15);
+  margin: 2rem 0;
+}
+
+.bilt-chart {
+    display: flex; 
+    flex-direction: column; 
+    align-items: center;
+    color: var(--arch-text); 
+    font-family: 'JetBrains Mono', monospace;
+    
+    /* ADD THESE */
+    margin-top: 1.5rem;
+    margin-bottom: 4rem; /* Extra large gap for visual separation */
+    padding: 2rem;
+    background: rgba(0, 0, 0, 0.1); /* Subtle "nesting" look */
+    border-radius: 8px;
+}
+.bilt-chart-box {
+    border: 1px solid rgba(165, 243, 252, 0.3);
+    background: var(--arch-bg);
+    width: 100%; max-width: 600px;
+    padding: 1rem; margin: 0.5rem 0;
+    border-radius: 4px;
+}
+.bilt-chart-arrow { color: var(--bilt-purple); margin: 0.2rem 0; font-size: 1.2rem; }
+.bilt-chart-label { font-size: 0.75rem; color: #94a3b8; margin: -5px 0 5px 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mt-4 g-4">
+
+  <!-- ───────────────────────────────── Sidebar ──────────────────────────── -->
+  <div class="col-md-3 col-lg-2">
+    <nav class="help-sidebar">
+      <div class="card">
+        <div class="card-header"><i class="fas fa-list"></i> 目次</div>
+        <div class="card-body p-2">
+          <nav class="nav flex-column" id="helpNav">
+            <a class="nav-link" href="#overview">概要</a>
+            <a class="nav-link" href="#quickstart">クイックスタート</a>
+            <a class="nav-link" href="#annotation">アノテーション</a>
+            <a class="nav-link" href="#dataset">データセット準備</a>
+            <a class="nav-link" href="#bilt">BILTとは</a>
+            <a class="nav-link" href="#architecture">アーキテクチャ</a>
+            <a class="nav-link" href="#bilt-variants">BILTバリアント</a>
+            <a class="nav-link" href="#bilt-training">BILTトレーニング</a>
+            <a class="nav-link" href="#bilt-params">パラメータ詳細</a>
+            <a class="nav-link" href="#bilt-advanced">高度なトレーニング</a>
+            <a class="nav-link" href="#detection">物体検知</a>
+            <a class="nav-link" href="#workflow">ワークフロー</a>
+            <a class="nav-link" href="#faq">FAQ</a>
+          </nav>
+        </div>
+      </div>
+    </nav>
+  </div>
+
+  <!-- ───────────────────────────── Main Content ────────────────────────── -->
+  <div class="col-md-9 col-lg-10">
+    <div class="d-flex align-items-center gap-3 mb-4">
+      <h2 class="mb-0"><i class="fas fa-book-open text-info"></i> アプリケーションガイド</h2>
+      <span class="badge badge-bilt fs-6">BILT</span>
+    </div>
+
+    <!-- ═══════════════════════════ 概要 ═══════════════════════════════════ -->
+    <section id="overview" class="help-section mb-5">
+      <div class="card">
+        <div class="card-header"><h5 class="mb-0"><i class="fas fa-info-circle text-info"></i> 概要</h5></div>
+        <div class="card-body">
+          <p>このアプリケーションは <strong>BILT</strong> を使ったオブジェクト検出のための統合ワークフローツールです。</p>
+          <div class="card card-bilt">
+            <div class="card-header">
+              <span class="badge badge-bilt me-2">BILT</span> BILTモードの特徴
+            </div>
+            <div class="card-body">
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <ul class="mb-0">
+                    <li><strong>BILT</strong> (Because I Like Twice) を使用</li>
+                    <li><span data-tip="ImageNetとは120万枚以上の画像で事前に学習された重みです。ゼロから学習するより少ない画像でも検出器を作れます。">ImageNet事前学習済みバックボーン</span>で少ない画像でも学習可能</li>
+                    <li>CPU フレンドリー設計（Raspberry Piでも動作）</li>
+                    <li>5つのバリアント (<code>spark / flash / core / pro / max</code>)</li>
+                    <li>PyTorch ベースのカスタムアーキテクチャ</li>
+                  </ul>
+                </div>
+                <div class="col-md-6">
+                  <ul class="mb-0">
+                    <li><span data-tip="CIoUはバウンディングボックスの位置・サイズ・中心点のずれをまとめて評価する高度な損失関数です。">CIoU</span> 損失 / <span data-tip="EMAとは学習中のモデル重みの指数移動平均を保持する技術。過学習を抑えてより汎化性能を高めます。">EMA</span> / モザイク拡張に対応</li>
+                    <li><span data-tip="FPN（特徴ピラミッドネットワーク）は画像を複数の解像度で同時に分析する構造です。小さい物体も大きい物体も一度に検出できます。">FPN アーキテクチャ</span>でマルチスケール検出</li>
+                    <li>CUDA GPU を自動検出・使用</li>
+                    <li>チェックポイントは <span data-tip="float16とは16ビット浮動小数点形式。通常の32ビットと比べてファイルサイズが半分になります。">float16</span> 保存でファイルサイズ半減</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════ クイックスタート ═══════════════════════ -->
+    <section id="quickstart" class="help-section mb-5">
+      <div class="card">
+        <div class="card-header"><h5 class="mb-0"><i class="fas fa-rocket text-success"></i> クイックスタート</h5></div>
+        <div class="card-body">
+          <h6>サービスの起動順序:</h6>
+          <ol class="list-group list-group-flush mb-3">
+            <li class="list-group-item d-flex gap-3" style="background:transparent;">
+              <span class="step-num">1</span>
+              <div><code>python bilt_service.py</code> — BILTバックエンド (port 5002) を起動</div>
+            </li>
+            <li class="list-group-item d-flex gap-3" style="background:transparent;">
+              <span class="step-num">2</span>
+              <div><code>python app.py</code> — メインアプリ (port 5000) を起動</div>
+            </li>
+          </ol>
+          <div class="alert alert-success mb-0">
+            <i class="fas fa-desktop me-1"></i>
+            または <code>python launcher.py</code> で全サービスを一括起動できます。
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════ アノテーション ════════════════════════ -->
+    <section id="annotation" class="help-section mb-5">
+      <div class="card">
+        <div class="card-header"><h5 class="mb-0"><i class="fas fa-tag text-warning"></i> ラベリング (アノテーション)</h5></div>
+        <div class="card-body">
+          <p>ラベリングページでは、画像に<span data-tip="バウンディングボックスとは検出対象の物体を囲む四角形の枠のことです。左上(x1,y1)と右下(x2,y2)の座標で表されます。">バウンディングボックス</span>を描画してクラスラベルを付与します。BILTトレーニングには標準の<span data-tip="YOLO形式とは「クラスID x中心 y中心 幅 高さ」を画像サイズで正規化した0〜1の値でテキストに記録するラベル形式です。">YOLO形式テキストラベル</span>が使われます。</p>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <h6><i class="fas fa-list-ol"></i> ラベリング手順:</h6>
+              <ol>
+                <li>「プロジェクト」ページで新規プロジェクトを作成</li>
+                <li>プロジェクトを開き、クラス名を設定</li>
+                <li>カメラまたはファイルアップロードで画像を追加</li>
+                <li>画像を選択し、キャンバス上でボックスを描画</li>
+                <li>クラスを選択してラベルを保存</li>
+                <li><code>train</code> / <code>val</code> の両方の<span data-tip="trainは学習用、valは検証用（精度確認用）データです。同じ画像を両方に入れないようにしてください。">スプリット</span>に画像を振り分ける</li>
+              </ol>
+            </div>
+            <div class="col-md-6">
+              <h6><i class="fas fa-keyboard"></i> キーボードショートカット:</h6>
+              <table class="table table-sm">
+                <tr><td><code>1-9</code></td><td>クラスを素早く選択</td></tr>
+                <tr><td><code>Delete</code></td><td>選択したボックスを削除</td></tr>
+                <tr><td><code>Ctrl+Z</code></td><td>元に戻す</td></tr>
+                <tr><td><code>←/→</code></td><td>前/次の画像</td></tr>
+                <tr><td><code>Space</code></td><td>保存</td></tr>
+              </table>
+            </div>
+          </div>
+          <div class="alert alert-info mb-0 mt-2">
+            <i class="fas fa-info-circle me-1"></i>
+            <strong>BILTによる再ラベリング:</strong> 一度でもBILTトレーニングを行った場合、その <code>.pth</code> モデルを使って「BILTで再ラベリング」セクションから自動ラベル付けができます。最初は手動でアノテーションしてBILTモデルを学習し、その後再ラベリングに活用してください。
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════ データセット準備 ══════════════════════ -->
+    <section id="dataset" class="help-section mb-5">
+      <div class="card">
+        <div class="card-header"><h5 class="mb-0"><i class="fas fa-folder-open text-warning"></i> データセット準備</h5></div>
+        <div class="card-body">
+
+          <h6 class="mt-1"><i class="fas fa-sitemap text-info"></i> ディレクトリ構成</h6>
+          <div class="dir-tree mb-3">
+<pre>
+<span style="color:#4CAF50;">my_dataset/</span>
+├── <span style="color:#4CAF50;">train/</span>
+│   ├── <span style="color:#2196F3;">images/</span>   <span style="color:gray;">← 学習用画像 (.jpg, .jpeg, .png)</span>
+│   └── <span style="color:#2196F3;">labels/</span>   <span style="color:gray;">← 学習用ラベル (.txt, 画像と同名)</span>
+├── <span style="color:#4CAF50;">val/</span>
+│   ├── <span style="color:#2196F3;">images/</span>   <span style="color:gray;">← 検証用画像</span>
+│   └── <span style="color:#2196F3;">labels/</span>   <span style="color:gray;">← 検証用ラベル</span>
+└── <span style="color:#FF9800;">data.yaml</span>     <span style="color:gray;">← クラス名定義（省略可・推奨）</span>
+</pre>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <h6><i class="fas fa-file-alt text-success"></i> ラベルファイル形式</h6>
+              <p class="small">各画像と同名の <code>.txt</code> ファイルを <code>labels/</code> に置きます。1行1オブジェクト:</p>
+              <div class="arch-block" style="white-space:pre; font-size:.75rem; color:#86efac;">&lt;クラスID&gt; &lt;x中心&gt; &lt;y中心&gt; &lt;幅&gt; &lt;高さ&gt;
+<span style="color:#94a3b8;"># 例: 640×480の画像、クラス0の物体</span>
+0 0.3125 0.2917 0.3125 0.2500</div>
+              <p class="small mt-2 mb-0">全ての値は画像サイズで <span data-tip="正規化とは値を0〜1の範囲に変換することです。例えば幅200pxの物体が640px幅の画像にある場合、200/640=0.3125と記録します。">正規化</span>（0〜1）されています。</p>
+            </div>
+            <div class="col-md-6">
+              <h6><i class="fas fa-file-code text-primary"></i> data.yaml</h6>
+              <div class="arch-block" style="font-size:.75rem; color:#c4b5fd;">nc: 3
+names:
+  - cat
+  - dog
+  - person</div>
+              <p class="small mt-2 mb-0"><code>nc</code> はクラス数、<code>names</code> はクラス名のリストです（0番から順番に）。</p>
+            </div>
+          </div>
+
+          <h6><i class="fas fa-chart-bar text-warning"></i> 必要な画像枚数の目安</h6>
+          <table class="table table-sm param-table">
+            <thead><tr><th>クラスあたり枚数</th><th>期待できる精度</th></tr></thead>
+            <tbody>
+              <tr><td>2〜5枚</td><td>動作はする。ノイズが多いため <code>conf=0.05</code> で確認推奨</td></tr>
+              <tr><td>10〜50枚</td><td>50エポック以上で良好な結果</td></tr>
+              <tr><td>50〜200枚</td><td>実用的な検出器。ほとんどのユースケースに対応</td></tr>
+              <tr><td>200〜500枚</td><td>高精度。<code>pro</code> や <code>max</code> バリアントを試す価値あり</td></tr>
+              <tr><td>500枚〜</td><td>優秀な結果。バッチサイズとエポック数を増やすと効果的</td></tr>
+            </tbody>
+          </table>
+
+          <div class="alert alert-warning mb-0">
+            <i class="fas fa-exclamation-triangle me-1"></i>
+            <strong>分割の注意:</strong> 同じ画像を <code>train</code> と <code>val</code> の両方に入れないでください。<code>val</code> はモデルが「見たことない」画像で精度を測るためのものです。理想は80%をtrain、20%をvalに振り分けます。
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════ BILTとは ═══════════════════════════════ -->
+    <section id="bilt" class="help-section mb-5">
+      <div class="card card-bilt">
+        <div class="card-header">
+          <h5 class="mb-0"><span class="badge badge-bilt me-2">BILT</span> BILT (Because I Like Twice) とは</h5>
+        </div>
+        <div class="card-body">
+          <p><strong>BILT</strong> は PyTorch ベースの軽量オブジェクト検出ライブラリです。<span data-tip="ImageNet事前学習済みバックボーンとは、120万枚の画像で事前に特徴抽出を学んだニューラルネットワークです。ゼロから学習するよりはるかに少ないデータで良い検出器が作れます。">ImageNet事前学習済みバックボーン</span>を持ち、少ない画像でもすぐに学習を始められます。</p>
+
+          <h6><i class="fas fa-lightbulb"></i> BILTの特徴:</h6>
+          <ul>
+            <li><strong>事前学習済みバックボーン</strong>: 2〜5枚の画像からでも動く検出器を作成可能</li>
+            <li><strong>CPU対応</strong>: GPUがなくても動作（小バリアントは特に高速）</li>
+            <li><strong><span data-tip="FPNは画像を1/8, 1/16, 1/32サイズに縮小した「特徴マップ」を組み合わせ、小〜大サイズのオブジェクトを同時検出できる構造です。">FPN アーキテクチャ</span></strong>: マルチスケール特徴量で小物体にも対応</li>
+            <li><strong>バックボーンウォームアップ</strong>: 最初の数エポックはバックボーンを凍結して検出ヘッドを先に収束</li>
+            <li><strong><span data-tip="AdamWはAdamオプティマイザにWeight Decayを追加したもの。Cosine Annealingは学習率をコサイン曲線に沿ってゆっくり下げるスケジューラです。">AdamW + Cosine Annealing</span></strong>: 安定した学習スケジューリング</li>
+            <li><strong>CUDA GPU 自動検出</strong>: GPU搭載環境では自動的にGPUを使用</li>
+          </ul>
+
+          <div class="alert alert-warning mb-0">
+            <i class="fas fa-exclamation-triangle me-1"></i>
+            <strong>制限:</strong> BILTはセグメンテーション・OBBには未対応です。<span data-tip="バウンディングボックス検出とは、物体を四角形の枠で囲む検出方式です。輪郭を抽出するセグメンテーションや回転ボックス(OBB)は対象外です。">バウンディングボックス検出</span>のみです。
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════ アーキテクチャ ════════════════════════ -->
+    <section id="architecture" class="help-section mb-5">
+      <div class="card card-bilt">
+        <div class="card-header">
+          <h5 class="mb-0"><span class="badge badge-bilt me-2">BILT</span> アーキテクチャ詳細</h5>
+        </div>
+        <div class="card-body">
+
+<div class="bilt-chart">
+    <div class="fw-bold text-light">入力画像 (B, 3, H, W) — 正規化済み</div>
+    <div class="bilt-chart-arrow">▼</div>
+
+    <div class="bilt-chart-box">
+        <div class="text-info fw-bold mb-2">BILTBackbone (ImageNet事前学習済み)</div>
+        <div class="small">MobileNet または ResNet</div>
+        <div class="mt-2 opacity-75 small">
+            C3 (stride  8, 1/8  解像度)<br>
+            C4 (stride 16, 1/16 解像度)<br>
+            C5 (stride 32, 1/32 解像度)
+        </div>
+    </div>
+
+    <div class="bilt-chart-label">[C3, C4, C5]</div>
+    <div class="bilt-chart-arrow">▼</div>
+
+    <div class="bilt-chart-box">
+        <div class="text-info fw-bold mb-2">FPNNeck (Feature Pyramid Network)</div>
+        <div class="small">
+            P3 ← Conv(C3) + Upsample(P4)<br>
+            P4 ← Conv(C4) + Upsample(P5)<br>
+            P5 ← Conv(C5)<br>
+            P6 ← Stride-2 Conv on C5 (大物体用)
+        </div>
+    </div>
+
+    <div class="bilt-chart-label">[P3, P4, P5, P6]</div>
+    <div class="bilt-chart-arrow">▼</div>
+
+    <div class="bilt-chart-box">
+        <div class="text-info fw-bold mb-2">BILTHead (全FPNレベルで重み共有)</div>
+        <div class="small">
+            分類タワー → <code class="text-warning">cls_preds</code> (A x C 個/箇所)<br>
+            回帰タワー → <code class="text-warning">box_preds</code> (A x 4 個/箇所)<br>
+            A = 9 アンカー/箇所 (3スケール x 3アスペクト比)
+        </div>
+    </div>
+
+    <div class="bilt-chart-arrow">▼</div>
+    <div class="small text-center opacity-75 mt-2">
+        学習時: BILTLoss (Focal Loss + Smooth-L1 または CIoU)<br>
+        推論時: Box decode → NMS → スコアフィルタ → top-N
+    </div>
+</div>
+
+          <div class="row g-3">
+            <div class="col-md-6">
+              <h6><i class="fas fa-layer-group text-info"></i> バックボーン別チャンネル数</h6>
+              <table class="table table-sm param-table">
+                <thead><tr><th>バリアント</th><th>バックボーン</th><th>C3</th><th>C4</th><th>C5</th></tr></thead>
+                <tbody>
+                  <tr><td><code>spark</code></td><td>MobileNetV2</td><td>32</td><td>96</td><td>1280</td></tr>
+                  <tr><td><code>flash</code></td><td>MobileNetV3-S</td><td>24</td><td>48</td><td>576</td></tr>
+                  <tr><td><code>core</code></td><td>MobileNetV3-L</td><td>40</td><td>112</td><td>960</td></tr>
+                  <tr><td><code>pro</code></td><td>ResNet-50</td><td>512</td><td>1024</td><td>2048</td></tr>
+                  <tr><td><code>max</code></td><td>ResNet-101</td><td>512</td><td>1024</td><td>2048</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="col-md-6">
+              <h6><i class="fas fa-calculator text-danger"></i> 損失関数</h6>
+              <table class="table table-sm param-table">
+                <thead><tr><th>損失</th><th>役割</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td><span data-tip="Focal Lossとは、簡単に識別できる背景サンプルの損失を小さく抑え、難しいサンプルの学習に集中させる分類損失です。クラス不均衡に強いのが特徴です。">Focal Loss</span></td>
+                    <td>クラス分類（常に有効）</td>
+                  </tr>
+                  <tr>
+                    <td><span data-tip="Smooth-L1はボックス座標の誤差を測る損失です。外れ値に対してL1（線形）に切り替わるため学習が安定します。">Smooth-L1</span></td>
+                    <td>ボックス回帰（デフォルト）</td>
+                  </tr>
+                  <tr>
+                    <td><span data-tip="CIoU（Complete IoU）はボックスの重なり面積・中心距離・アスペクト比のずれを同時にペナルティとして与える高度な回帰損失です。Smooth-L1より精密なボックス回帰が可能です。">CIoU</span></td>
+                    <td>高精度ボックス回帰（オプション）</td>
+                  </tr>
+                </tbody>
+              </table>
+              <h6 class="mt-2"><i class="fas fa-anchor text-warning"></i> アンカー設定 (512px入力時)</h6>
+              <table class="table table-sm param-table">
+                <thead><tr><th>レベル</th><th>グリッド</th><th>アンカー数</th></tr></thead>
+                <tbody>
+                  <tr><td>P3</td><td>64×64</td><td>36,864</td></tr>
+                  <tr><td>P4</td><td>32×32</td><td>9,216</td></tr>
+                  <tr><td>P5</td><td>16×16</td><td>2,304</td></tr>
+                  <tr><td>P6</td><td>8×8</td><td>576</td></tr>
+                  <tr class="fw-bold"><td>合計</td><td>—</td><td>48,960</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="alert alert-secondary mb-0">
+            <i class="fas fa-shield-alt me-1"></i>
+            <strong>BatchNorm の検証挙動:</strong>
+            検証時、BILTは全<span data-tip="BatchNormalizationとは各層の出力を正規化して学習を安定させる技術です。学習中に蓄積した統計（平均・分散）を検証時も使うため、検証バッチの統計で汚染されないよう保護が必要です。">BatchNorm</span>層を <code>eval()</code> モードに設定し、検証バッチの統計で学習統計が上書きされるのを防ぎます（ResNetモデルは53層以上のBN層を持つため特に重要）。
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════ BILTバリアント ════════════════════════ -->
+    <section id="bilt-variants" class="help-section mb-5">
+      <div class="card card-bilt">
+        <div class="card-header">
+          <h5 class="mb-0"><span class="badge badge-bilt me-2">BILT</span> BILTバリアント</h5>
+        </div>
+        <div class="card-body">
+          <p>BILTには5つのモデルバリアントがあります。速度と精度のトレードオフで選択してください。</p>
+          <div class="table-responsive">
+            <table class="table variant-table table-bordered align-middle">
+              <thead>
+                <tr>
+                  <th>バリアント</th>
+                  <th>短縮名</th>
+                  <th>バックボーン</th>
+                  <th>入力サイズ</th>
+                  <th>ファイルサイズ</th>
+                  <th>用途</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="row-spark">
+                  <td><strong>spark</strong></td>
+                  <td><code>n</code>, <code>nano</code></td>
+                  <td><span data-tip="MobileNetV2は逆残差ブロックと線形ボトルネックを使ったモバイル向け軽量バックボーン。CPUやRaspberry Piでも高速に動作します。">MobileNetV2</span></td>
+                  <td>320 px</td>
+                  <td>~9 MB</td>
+                  <td>最高速・最小メモリ (Raspberry Piなど)</td>
+                </tr>
+                <tr class="row-flash">
+                  <td><strong>flash</strong></td>
+                  <td><code>s</code>, <code>small</code></td>
+                  <td><span data-tip="MobileNetV3-SmallはNAS（ニューラルアーキテクチャ探索）で設計された超軽量バックボーン。Squeeze-and-Excitationモジュールを含み同じ計算量でより高精度です。">MobileNetV3-Small</span></td>
+                  <td>416 px</td>
+                  <td>~13 MB</td>
+                  <td>高速・良好な精度</td>
+                </tr>
+                <tr class="row-core">
+                  <td><strong>core</strong> ⭐</td>
+                  <td><code>m</code>, <code>medium</code></td>
+                  <td><span data-tip="MobileNetV3-LargeはMobileNetV3の大型版。ラップトップCPUでも快適に動作し、精度と速度のバランスが最もよいバリアントです。">MobileNetV3-Large</span></td>
+                  <td>512 px</td>
+                  <td>~19 MB</td>
+                  <td>バランス型 <strong>（初心者推奨）</strong></td>
+                </tr>
+                <tr class="row-pro">
+                  <td><strong>pro</strong></td>
+                  <td><code>l</code>, <code>large</code></td>
+                  <td><span data-tip="ResNet-50は残差接続（スキップ接続）を持つ50層の深いネットワーク。MobileNetより豊かな特徴表現が可能で、細かなカテゴリや小物体の検出に強いです。">ResNet-50</span></td>
+                  <td>640 px</td>
+                  <td>~55 MB</td>
+                  <td>高精度（GPU推奨）</td>
+                </tr>
+                <tr class="row-max">
+                  <td><strong>max</strong></td>
+                  <td><code>x</code>, <code>xlarge</code></td>
+                  <td><span data-tip="ResNet-101はResNet-50の101層版。最も豊かな特徴抽出能力を持ちますが、学習・推論とも最も遅くVRAMも多く必要です。GPU必須です。">ResNet-101</span></td>
+                  <td>640 px</td>
+                  <td>~95 MB</td>
+                  <td>最高精度 (GPU必須)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="alert alert-secondary mb-0">
+            <strong>推奨:</strong> 初めては <code>core</code> から。リソースが限られる場合は <code>spark</code> / <code>flash</code>。高精度が必要で GPU がある場合は <code>pro</code> / <code>max</code>。
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════ BILTトレーニング ══════════════════════ -->
+    <section id="bilt-training" class="help-section mb-5">
+      <div class="card card-bilt">
+        <div class="card-header">
+          <h5 class="mb-0"><span class="badge badge-bilt me-2">BILT</span> BILTトレーニング</h5>
+        </div>
+        <div class="card-body">
+          <p>ワークスペースの「BILTトレーニング」パネルから実行できます。</p>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <h6>学習の流れ:</h6>
+              <ol>
+                <li>バリアントとエポック数を選択</li>
+                <li>「トレーニング開始」ボタンをクリック</li>
+                <li>損失グラフでリアルタイムに進捗確認</li>
+                <li>完了後 <code>.pth</code> ファイルが自動保存</li>
+              </ol>
+            </div>
+            <div class="col-md-6">
+              <h6>出力モデルの保存先:</h6>
+              <ul>
+                <li><code>projects/&lt;name&gt;/runs/bilt/train_*/weights/best.pth</code></li>
+                <li><code>bilt_models/&lt;name&gt;_bilt_*.pth</code> （検知ページから選択可）</li>
+              </ul>
+            </div>
+          </div>
+          <div class="alert alert-info mb-0 mt-2">
+            <i class="fas fa-clock me-1"></i>
+            <strong>学習時間目安 (core, CPU):</strong> 50エポック × 100枚 ≈ 30〜90分。GPU使用時は大幅に短縮されます。
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════ パラメータ詳細（基本） ════════════════ -->
+    <section id="bilt-params" class="help-section mb-5">
+      <div class="card card-bilt">
+        <div class="card-header">
+          <h5 class="mb-0"><span class="badge badge-bilt me-2">BILT</span> トレーニング パラメータ詳細 <small class="text-muted fw-normal">（初心者向け）</small></h5>
+        </div>
+        <div class="card-body">
+          <p class="text-muted small mb-3">
+            <i class="fas fa-info-circle me-1"></i>
+            初めて使う場合は <strong>すべてデフォルト値のまま</strong> でトレーニングを開始してかまいません。
+          </p>
+
+          <!-- 基本パラメータ -->
+          <h6 class="mt-2"><i class="fas fa-sliders-h text-primary"></i> 基本パラメータ</h6>
+          <div class="table-responsive mb-4">
+            <table class="table table-sm table-bordered param-table">
+              <thead><tr><th style="width:15%">パラメータ</th><th style="width:12%">デフォルト</th><th>意味・使い方</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><code data-tip="使用するモデルサイズ。spark=最速最小、core=バランス、max=最高精度">variant</code></td>
+                  <td><code>core</code></td>
+                  <td>使用するモデルのサイズを選びます。小さいほど速く、大きいほど精度が上がります。<br><strong>初心者は <code>core</code>（中型）を推奨。</strong> Raspberry Pi など低スペック機器では <code>spark</code> を選んでください。</td>
+                </tr>
+                <tr>
+                  <td><code data-tip="1エポック＝全学習画像を1周。少なすぎると学習不足、多すぎると過学習になります。">epochs</code></td>
+                  <td><code>50</code></td>
+                  <td>学習を何回繰り返すかを指定します（1エポック＝全画像を1周）。<br>少なすぎると「学習不足」、多すぎると「過学習」になります。画像が少ない場合（50枚以下）は <strong>30〜50</strong>、100枚以上なら <strong>50〜100</strong> が目安です。</td>
+                </tr>
+                <tr>
+                  <td><code data-tip="一度に何枚の画像で重みを更新するか。大きいほど安定するがメモリを使う。最小値は2（BatchNorm制約）。">batch</code></td>
+                  <td><code>4</code></td>
+                  <td>一度に何枚の画像を使って学習を更新するかを指定します。<br>大きいほど学習が安定しますが、メモリを多く使います。メモリ不足になる場合は <strong>2</strong> に下げてください（最小値は 2）。</td>
+                </tr>
+                <tr>
+                  <td><code data-tip="学習・推論時に画像をリサイズする正方形サイズ。空欄にするとバリアントの推奨値が使われます。">imgsz</code></td>
+                  <td>バリアント依存</td>
+                  <td>学習・推論時に画像をリサイズするピクセルサイズです（正方形）。<br>空欄にするとバリアントの推奨サイズ（spark=320, flash=416, core=512, pro/max=640）が使われます。<strong>初心者は空欄推奨。</strong></td>
+                </tr>
+                <tr>
+                  <td><code data-tip="学習率＝1回の更新でどれだけ大きく重みを動かすか。大きすぎると発散、小さすぎると学習が遅い。">lr0</code></td>
+                  <td><code>0.002</code></td>
+                  <td>学習率（Learning Rate）の初期値です。「1回の更新でどれだけ大きく修正するか」を決めます。<br>大きすぎると学習が不安定になり、小さすぎると学習が遅くなります。<strong>初心者はデフォルトのまま</strong>で問題ありません。</td>
+                </tr>
+                <tr>
+                  <td><code data-tip="データ読み込みに使う並列プロセス数。0=メインプロセスのみ。WindowsやRaspberry Piでは0を推奨。">workers</code></td>
+                  <td><code>0</code></td>
+                  <td>データ読み込みに使う並列プロセス数です。<br><code>0</code> はメインプロセスで行います（Windows・Raspberry Piではこの設定を推奨）。マルチコアのLinux PCでは <code>2</code>〜<code>4</code> にすると速くなる場合があります。</td>
+                </tr>
+                <tr>
+                  <td><code data-tip="学習に使うハードウェア。空欄でCUDA GPU（あれば）を自動選択。CPUを強制したい場合は'cpu'と入力。">device</code></td>
+                  <td>自動</td>
+                  <td>学習に使うハードウェアを指定します。空欄のとき、CUDA（GPU）が使えれば自動的にGPUを使います。<br><strong>初心者は空欄推奨。</strong> CPU強制は <code>cpu</code>、特定GPUは <code>cuda:1</code>、Apple Siliconは <code>mps</code>。</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- ウォームアップ・LRスケジュール -->
+          <h6 class="mt-3"><i class="fas fa-fire text-warning"></i> ウォームアップ・学習率スケジュール</h6>
+          <p class="text-muted small">バックボーンを段階的に学習させるための設定。初心者はデフォルトのまま推奨。</p>
+          <div class="table-responsive mb-4">
+            <table class="table table-sm table-bordered param-table">
+              <thead><tr><th style="width:22%">パラメータ</th><th style="width:12%">デフォルト</th><th>意味・使い方</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><code data-tip="最初のN エポック、バックボーンを凍結して検出ヘッドだけを学習させます。バックボーンを壊さないようにする準備運動です。">warmup_epochs</code></td>
+                  <td><code>3</code></td>
+                  <td>最初の数エポック、バックボーン（画像の特徴を抽出する部分）を凍結して検出ヘッドのみ学習させます。<br>これにより学習初期の不安定な更新でバックボーンが壊れるのを防ぎます。<strong>0</strong> に設定するとウォームアップなしで全体を同時に学習します。画像が非常に少ない場合（20枚以下）は <strong>0</strong> にすると良い場合もあります。</td>
+                </tr>
+                <tr>
+                  <td><code data-tip="ウォームアップ後のバックボーン学習率の倍率。0.1ならバックボーンはヘッドの1/10の速さで学習します。">backbone_lr_mult</code></td>
+                  <td><code>0.1</code></td>
+                  <td>ウォームアップ後、バックボーンに適用する学習率の倍率です。<br><code>0.1</code> の場合、バックボーンは検出ヘッドの1/10の速さで学習します。これにより既に学習済みの特徴抽出能力を壊さずに調整できます。</td>
+                </tr>
+                <tr>
+                  <td><code data-tip="Cosine Annealingスケジューラが最終的に下げる学習率の最小値。学習終盤の微調整を安定させます。">cos_lr_min</code></td>
+                  <td><code>1e-6</code></td>
+                  <td>コサイン学習率スケジューラが最終的に下げる学習率の最小値です。学習が進むにつれ学習率を徐々に下げ、最後の微調整を安定させます。<strong>初心者はデフォルトのまま推奨。</strong></td>
+                </tr>
+                <tr>
+                  <td><code data-tip="Weight Decayは重みの大きさにペナルティを与えて過学習を抑制する正則化です。AdamWに組み込まれています。">weight_decay</code></td>
+                  <td><code>1e-4</code></td>
+                  <td>重みの大きさにペナルティをかけて過学習を抑制する正則化パラメータです。<br>大きくするほど過学習しにくくなりますが、学習が遅くなります。<strong>初心者はデフォルトのまま推奨。</strong></td>
+                </tr>
+                <tr>
+                  <td><code data-tip="勾配クリッピングは学習中に勾配が異常に大きくなった時に上限を設ける処理です。loss=NaNになるのを防ぎます。">grad_clip</code></td>
+                  <td><code>5.0</code></td>
+                  <td>勾配クリッピングの閾値です。学習中に勾配が異常に大きくなった場合に、この値で上限を設けることで学習の発散（loss が NaN になること）を防ぎます。<strong>初心者はデフォルトのまま推奨。</strong></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 損失関数パラメータ -->
+          <h6 class="mt-3"><i class="fas fa-calculator text-danger"></i> 損失関数パラメータ</h6>
+          <div class="table-responsive mb-4">
+            <table class="table table-sm table-bordered param-table">
+              <thead><tr><th style="width:22%">パラメータ</th><th style="width:12%">デフォルト</th><th>意味・使い方</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><code data-tip="Focal Loss のクラス均衡パラメータ。正例（物体）と負例（背景）の比率が偏っている場合に少数派に大きな重みを付けます。">focal_alpha</code></td>
+                  <td><code>0.25</code></td>
+                  <td>Focal Loss のクラス均衡パラメータです。<br>検出対象（正例）と背景（負例）の比率が偏っている場合に、少ない方のクラスに大きな重みを付けて学習させます。データに背景ばかりが多い場合は少し大きくする（例: <code>0.5</code>）と改善することがあります。</td>
+                </tr>
+                <tr>
+                  <td><code data-tip="Focal Loss の難易度調整パラメータ。大きいほど「難しいサンプル」への集中度が上がります。通常1〜5の範囲。">focal_gamma</code></td>
+                  <td><code>2.0</code></td>
+                  <td>Focal Loss の難易度調整パラメータです。<br>すでに正しく検出できている「簡単なサンプル」の損失を小さくして、「難しいサンプル」の学習に集中させます。値が大きいほど難しいサンプルへの集中度が上がります（通常 1〜5 の範囲）。</td>
+                </tr>
+                <tr>
+                  <td><code data-tip="ボックスの位置精度（回帰損失）の重み。大きくするとボックスの位置をより重視して学習します。">box_loss_weight</code></td>
+                  <td><code>1.0</code></td>
+                  <td>バウンディングボックスの位置精度（回帰損失）の重みです。<br>大きくするとボックスの位置をより重視して学習します。クラスは正しく当たっているがボックスがずれる場合は大きくするとよいです。</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- データ拡張 -->
+          <h6 class="mt-3"><i class="fas fa-images text-success"></i> データ拡張パラメータ</h6>
+          <p class="text-muted small"><span data-tip="データ拡張とは学習画像を自動的に変形・加工して見かけ上のデータ数を増やす技術です。少ない画像でも過学習しにくくなります。">データ拡張</span>は学習画像を自動加工して水増しする技術です。</p>
+          <div class="table-responsive mb-3">
+            <table class="table table-sm table-bordered param-table">
+              <thead><tr><th style="width:22%">パラメータ</th><th style="width:12%">デフォルト</th><th>意味・使い方</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><code>augment</code></td>
+                  <td><code>true</code></td>
+                  <td>データ拡張（反転・色変化）を有効にするかどうかです。<br><strong>基本的に有効のまま推奨。</strong> 無効にすると学習画像がそのままの状態のみで学習され、過学習しやすくなります。</td>
+                </tr>
+                <tr>
+                  <td><code data-tip="学習画像を左右反転させる確率。0.5なら50%の確率で反転。左右非対称な物体（文字など）を検出する場合は0.0に設定。">flip_prob</code></td>
+                  <td><code>0.5</code></td>
+                  <td>学習画像を左右反転させる確率です。<br><code>0.5</code> は「50%の確率で反転させる」という意味です。左右非対称な物体（例: 文字、特定の方向を持つ製品）を検出する場合は <strong>0.0</strong> に設定してください。</td>
+                </tr>
+                <tr>
+                  <td><code data-tip="Brightnessとは画像の明るさのことです。0.4なら最大±40%の明るさ変化を加えます。照明変化が激しい環境では大きくします。">color_jitter_b</code></td>
+                  <td><code>0.4</code></td>
+                  <td>明るさ（Brightness）をランダムに変化させる強度です。<br><code>0.4</code> は「最大±40%の明るさ変化を加える」という意味です。照明条件が大きく変わる環境では値を大きく（<code>0.6</code>〜<code>0.8</code>）してください。</td>
+                </tr>
+                <tr>
+                  <td><code data-tip="Contrastとは明暗の差のことです。屋外など明暗が変動する環境では大きな値が効果的です。">color_jitter_c</code></td>
+                  <td><code>0.4</code></td>
+                  <td>コントラスト（Contrast）をランダムに変化させる強度です。<br>明暗の差がばらつく環境（屋外など）では大きくすると効果的です。</td>
+                </tr>
+                <tr>
+                  <td><code data-tip="Saturationとは色の鮮やかさのことです。グレースケール画像を扱う場合は0.0にしてもよいです。">color_jitter_s</code></td>
+                  <td><code>0.4</code></td>
+                  <td>彩度（Saturation）をランダムに変化させる強度です。<br>色の鮮やかさが変わる環境に有効です。グレースケールに近い画像を扱う場合は <strong>0.0</strong> にしても良いです。</td>
+                </tr>
+                <tr>
+                  <td><code data-tip="Hueとは色相（色の種類）のことです。赤い物体のみを検出するなど色分類が重要なタスクでは0.0に設定してください。">color_jitter_h</code></td>
+                  <td><code>0.1</code></td>
+                  <td>色相（Hue）をランダムに変化させる強度です。<br><code>0.1</code> は「最大±10%の色相変化」です。色の分類が重要なタスク（例: 赤い物体のみを検出）では <strong>0.0</strong> にしてください。</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="alert alert-success mb-0 mt-3">
+            <i class="fas fa-lightbulb me-1"></i>
+            <strong>まず試すべき調整順序:</strong>
+            <ol class="mb-0 mt-1">
+              <li>デフォルト値のままトレーニング実行</li>
+              <li>val_lossが下がらない → <code>lr0</code> を <code>0.001</code> に下げる</li>
+              <li>ボックスがずれる → <code>box_loss_weight</code> を <code>2.0</code> に上げる</li>
+              <li>左右非対称な物体 → <code>flip_prob</code> を <code>0.0</code> に設定</li>
+              <li>照明変化が激しい → <code>color_jitter_b/c</code> を <code>0.6</code> に上げる</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════ 高度なトレーニング ════════════════════ -->
+    <section id="bilt-advanced" class="help-section mb-5">
+      <div class="card card-bilt">
+        <div class="card-header">
+          <h5 class="mb-0"><span class="badge badge-bilt me-2">BILT</span> 高度なトレーニングオプション</h5>
+        </div>
+        <div class="card-body">
+          <p class="text-muted small mb-3">
+            <i class="fas fa-info-circle me-1"></i>
+            以下の機能は精度向上に効果的ですが、初心者は基本パラメータに慣れてから試してください。特に <code>pro</code>/<code>max</code> バリアントで効果が顕著です。
+          </p>
+          <div class="table-responsive mb-3">
+            <table class="table table-sm table-bordered param-table">
+              <thead><tr><th style="width:22%">パラメータ</th><th style="width:12%">デフォルト</th><th>意味・使い方</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><code data-tip="学習率ウォームアップ：最初のN エポックで学習率を10%→100%まで線形に増加させます。学習初期の不安定さを抑えます。warmup_epochsと異なりバックボーンは凍結しません。">lr_warmup_epochs</code></td>
+                  <td><code>0</code></td>
+                  <td>LR線形ウォームアップのエポック数。大きいデータセットや <code>pro/max</code> では <code>5</code> 程度推奨。</td>
+                </tr>
+                <tr>
+                  <td><code data-tip="CIoU（Complete IoU）はSmooth-L1より高精度なボックス回帰損失です。重なり面積・中心距離・アスペクト比のずれを同時に最小化します。">use_ciou</code></td>
+                  <td><code>false</code></td>
+                  <td>CIoU回帰損失を使用。<code>true</code> にするとボックス精度が向上。<code>pro/max</code> では有効化推奨。</td>
+                </tr>
+                <tr>
+                  <td><code data-tip="EMA（指数移動平均）は学習中のモデル重みの移動平均を別途保持する技術です。最終モデルがよりスムーズになり汎化性能が上がります。">use_ema</code></td>
+                  <td><code>false</code></td>
+                  <td>指数移動平均を有効化。汎化性能向上に効果あり。<code>pro/max</code> では有効化推奨。</td>
+                </tr>
+                <tr>
+                  <td><code data-tip="EMAの減衰率の上限。大きいほどEMAが過去の重みを長く記憶します。データセットサイズに応じて自動調整されます。">ema_decay</code></td>
+                  <td><code>0.9999</code></td>
+                  <td>EMA減衰率の上限。データセットサイズに自動調整されるためデフォルトのまま推奨。</td>
+                </tr>
+                <tr>
+                  <td><code data-tip="モザイク拡張は4枚の画像を1枚に組み合わせる強力なデータ拡張技術です。小さいデータセットでの過学習抑制に非常に効果的です。">mosaic</code></td>
+                  <td><code>false</code></td>
+                  <td>4画像モザイク拡張を有効化。小さいデータセットでの過学習抑制に効果的。</td>
+                </tr>
+                <tr>
+                  <td><code data-tip="モザイク拡張を適用する確率。0.5なら各バッチの50%にモザイクを適用します。">mosaic_prob</code></td>
+                  <td><code>0.5</code></td>
+                  <td>モザイク適用確率。<code>mosaic=true</code> の場合のみ有効。</td>
+                </tr>
+                <tr>
+                  <td><code data-tip="全学習画像をRAMにキャッシュする機能。2回目以降のエポックでディスク読み込みが不要になり高速化します。RAMが十分にある場合のみ有効にしてください。">cache_images</code></td>
+                  <td><code>false</code></td>
+                  <td>学習画像をRAMにキャッシュ。高速化に効果的だがRAMが十分にある場合のみ（目安：画像枚数×1MB以上の空きRAM）。</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="row g-2">
+            <div class="col-md-6">
+              <div class="alert alert-info mb-0">
+                <i class="fas fa-microchip me-1"></i>
+                <strong>MobileNet (spark/flash/core) 推奨設定:</strong><br>
+                <code>lr_warmup_epochs=3, use_ciou=True, use_ema=True, mosaic=True</code>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="alert alert-secondary mb-0">
+                <i class="fas fa-server me-1"></i>
+                <strong>ResNet (pro/max) 推奨設定:</strong><br>
+                <code>lr_warmup_epochs=5, use_ciou=True, use_ema=True, mosaic=True, cache_images=True</code>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════ 物体検知 ══════════════════════════════ -->
+    <section id="detection" class="help-section mb-5">
+      <div class="card">
+        <div class="card-header"><h5 class="mb-0"><i class="fas fa-search text-primary"></i> 物体検知</h5></div>
+        <div class="card-body">
+          <div class="card card-bilt mb-3">
+            <div class="card-header">
+              <span class="badge badge-bilt me-1">BILT</span> BILT検知の手順
+            </div>
+            <div class="card-body">
+              <ol>
+                <li>ワークフローページへ移動</li>
+                <li><code>.pth</code> モデルを選択（事前にトレーニング要）</li>
+                <li>カメラを選択して検知開始</li>
+                <li><code>conf</code> / <code>iou</code> / 最大検出数を必要に応じて調整</li>
+              </ol>
+            </div>
+          </div>
+
+          <h6>検知パラメータ詳細:</h6>
+          <div class="table-responsive">
+            <table class="table table-sm param-table">
+              <thead><tr><th>設定</th><th>デフォルト</th><th>意味</th><th>調整ガイド</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><span data-tip="信頼度閾値。この確率以上の検出のみ表示します。高すぎると検出漏れが増え、低すぎると誤検出が増えます。">conf（信頼度閾値）</span></td>
+                  <td><strong>0.80</strong></td>
+                  <td>この確率以上の検出のみ表示</td>
+                  <td>検出漏れが多い → <code>0.50〜0.60</code> に下げる。誤検出が多い → <code>0.85+</code> に上げる</td>
+                </tr>
+                <tr>
+                  <td><span data-tip="IoU（Intersection over Union）はNMSで重複ボックスを除去する閾値です。低いほど重複を厳しく除去します。">iou（NMS閾値）</span></td>
+                  <td>0.45</td>
+                  <td>重複ボックス除去の厳しさ</td>
+                  <td>物体が密集している → <code>0.3〜0.5</code> を試す</td>
+                </tr>
+                <tr>
+                  <td><span data-tip="1フレームあたりに返す検出の最大数。フレーム内に多くの物体がある場合は増やしてください。">最大検出数</span></td>
+                  <td><strong>5</strong></td>
+                  <td>フレームあたりの最大表示検出数</td>
+                  <td>多数の物体を同時検出したい → 増やす</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="alert alert-warning mb-0 mt-2">
+            <i class="fas fa-exclamation-triangle me-1"></i>
+            BILT検知には事前にBILTトレーニングで <code>.pth</code> ファイルを生成する必要があります。検知を停止して再開した場合、カメラは自動的に再初期化されます。
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════ ワークフロー ══════════════════════════ -->
+    <section id="workflow" class="help-section mb-5">
+      <div class="card">
+        <div class="card-header"><h5 class="mb-0"><i class="fas fa-project-diagram text-warning"></i> ワークフロー</h5></div>
+        <div class="card-body">
+          <p>ワークフローエディタでは、複数のカメラとBILT検知ステップを視覚的に組み合わせた自動化パイプラインを構築できます。</p>
+          <h6>ノードタイプ:</h6>
+          <div class="d-flex flex-wrap gap-2 mb-3">
+            <span class="badge bg-success">start</span>
+            <span class="badge badge-purple">bilt_detection</span>
+            <span class="badge bg-warning text-dark">loop</span>
+            <span class="badge bg-danger">alert</span>
+            <span class="badge bg-secondary">wait</span>
+            <span class="badge bg-dark">end</span>
+          </div>
+          <p class="text-muted small mb-0">ノードをドラッグ＆ドロップで配置し、矢印でつなぐことでパイプラインを構築します。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════ FAQ ═══════════════════════════════════ -->
+    <section id="faq" class="help-section mb-5">
+      <div class="card">
+        <div class="card-header"><h5 class="mb-0"><i class="fas fa-question-circle text-secondary"></i> よくある質問</h5></div>
+        <div class="card-body">
+          <div class="accordion" id="faqAccordion">
+
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                  BILTはどのような用途に向いていますか？
+                </button>
+              </h2>
+              <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                <div class="accordion-body">
+                  <ul class="mb-0">
+                    <li>独自の特定クラスをゼロから学習したい場合</li>
+                    <li>オフライン・エアギャップ環境で使う場合</li>
+                    <li>CPU のみの環境 (Raspberry Pi など) で動かす場合</li>
+                    <li>軽量でカスタマイズ可能なモデルが必要な場合</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                  BILTのトレーニングには何枚の画像が必要ですか？
+                </button>
+              </h2>
+              <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                <div class="accordion-body">
+                  ImageNet事前学習済みバックボーンのおかげで、理論上は <strong>2〜5枚</strong> からでも動く検出器が作れます。ただし安定した精度を得るには、クラスごとに <strong>20〜50枚</strong> の学習画像と 5〜15枚の検証画像を推奨します。
+                </div>
+              </div>
+            </div>
+
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                  BILT サービスに接続できない場合は？
+                </button>
+              </h2>
+              <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                <div class="accordion-body">
+                  <code>python bilt_service.py</code> が起動しているか確認してください。また、<code>bilt</code> パッケージが Python パスに存在するか確認してください（リポジトリは <code>../bilt/</code> に配置）。
+                </div>
+              </div>
+            </div>
+
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
+                  BILTモデルのファイル形式は？保存場所は？
+                </button>
+              </h2>
+              <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                <div class="accordion-body">
+                  BILTモデルは <code>.pth</code> 形式（<span data-tip="float16は16ビット浮動小数点。32ビット（float32）と比べてファイルサイズが約半分になります。読み込み時は自動でfloat32に変換されます。">float16保存</span>）で保存されます。チェックポイントには重みだけでなく、バリアント名・クラス名・入力サイズも含まれます。<br><br>
+                  保存先:<br>
+                  ① <code>projects/&lt;name&gt;/runs/bilt/train_*/weights/best.pth</code><br>
+                  ② <code>bilt_models/&lt;name&gt;_bilt_&lt;variant&gt;_*.pth</code>（検知ページで選択）
+                </div>
+              </div>
+            </div>
+
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">
+                  バッチサイズを2未満に設定できますか？
+                </button>
+              </h2>
+              <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                <div class="accordion-body">
+                  <span data-tip="BatchNormalizationはバッチ内の複数サンプルの統計を使って正規化するため、バッチサイズ1では統計が計算できず動作しません。">BatchNorm</span> の制約により最低 <strong>2</strong> が必要です。<code>1</code> に設定した場合は自動的に <code>2</code> に修正されます。
+                </div>
+              </div>
+            </div>
+
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq6">
+                  val_loss が全く下がりません。どうすれば良いですか？
+                </button>
+              </h2>
+              <div id="faq6" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                <div class="accordion-body">
+                  以下を順に確認してください:
+                  <ol>
+                    <li><strong>アノテーションを確認:</strong> ボックスが物体をしっかり囲んでいるか、クラスラベルが正しいか確認。</li>
+                    <li><strong>val画像が少ない:</strong> 各クラス最低 <strong>5〜10枚</strong> の検証画像が必要です。</li>
+                    <li><strong>学習率を下げる:</strong> <code>lr0</code> を <code>0.001</code> または <code>0.0005</code> に。</li>
+                    <li><strong>エポック数を増やす:</strong> <code>epochs</code> を <code>100</code> 以上に。</li>
+                    <li><strong>バリアントを小さくする:</strong> データが少ない場合は <code>spark</code> や <code>flash</code> の方が安定することがあります。</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq7">
+                  トレーニング中に "loss is NaN" エラーが出ます
+                </button>
+              </h2>
+              <div id="faq7" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                <div class="accordion-body">
+                  <span data-tip="NaN（Not a Number）は数値計算が失敗したことを示します。学習率が大きすぎると勾配が爆発してNaNが発生します。">NaN</span> は学習率が大きすぎるか、データに問題がある場合に発生します:
+                  <ul>
+                    <li><strong>学習率を下げる:</strong> <code>lr0</code> を <code>0.0005</code> などに。</li>
+                    <li><strong>grad_clipを下げる:</strong> <code>grad_clip</code> を <code>1.0</code> に。</li>
+                    <li><strong>アノテーション確認:</strong> 幅または高さが0のボックスがないか確認。</li>
+                    <li><strong>画像ファイル確認:</strong> 壊れた画像や極端に小さい画像が混じっていないか確認。</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq8">
+                  検知の conf / iou の値はどう設定すればいいですか？
+                </button>
+              </h2>
+              <div id="faq8" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                <div class="accordion-body">
+                  <table class="table table-sm">
+                    <thead><tr><th>設定</th><th>意味</th><th>目安</th></tr></thead>
+                    <tbody>
+                      <tr>
+                        <td><code>conf</code></td>
+                        <td>この確率以上の検出のみ表示</td>
+                        <td><strong>0.5〜0.7</strong> から試す。BILTデフォルト 0.80。</td>
+                      </tr>
+                      <tr>
+                        <td><code>iou</code></td>
+                        <td>重複除去の厳しさ</td>
+                        <td>密集環境では <strong>0.3〜0.5</strong>。BILTデフォルト 0.45。</td>
+                      </tr>
+                      <tr>
+                        <td>最大検出数</td>
+                        <td>フレームあたり最大表示数</td>
+                        <td>多数同時検出したい場合は増やす。BILTデフォルト 5。</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq9">
+                  検出ボックスの位置がずれている（座標がおかしい）
+                </button>
+              </h2>
+              <div id="faq9" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                <div class="accordion-body">
+                  ほとんどの場合、画像が <span data-tip="BGRはBlue-Green-Redの順。OpenCVはデフォルトでBGR形式を使います。BILTはRGB（Red-Green-Blue）を期待するため、OpenCVで読み込んだ画像はcvtColorで変換が必要です。">BGR形式</span>（OpenCV）のままRGBとして渡されていることが原因です:
+                  <div class="arch-block mt-2" style="font-size:.75rem; color:#86efac;">import cv2
+from PIL import Image
+
+bgr = cv2.imread("photo.jpg")
+rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+img = Image.fromarray(rgb)
+detections = model.predict(img)</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq10">
+                  BILTで再ラベリング（自動アノテーション）を使うには？
+                </button>
+              </h2>
+              <div id="faq10" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                <div class="accordion-body">
+                  <ol>
+                    <li>まず <strong>手動でアノテーション</strong> した画像でBILTモデルをトレーニング（最低20〜50枚）。</li>
+                    <li>完了後、ワークスペースの「<strong>BILTで再ラベリング</strong>」セクションを開く。</li>
+                    <li><code>.pth</code> モデルを選択し、対象スプリットを選ぶ。</li>
+                    <li>モード（全画像/ラベル済みのみ/未ラベルのみ）を選択して実行。</li>
+                    <li>自動生成されたラベルは必ず手動で確認・修正してください。</li>
+                  </ol>
+                  <div class="alert alert-warning mb-0">
+                    <i class="fas fa-exclamation-triangle me-1"></i>
+                    実行前に既存ラベルのバックアップが自動作成されます（<code>bilt_relabel_backup_*</code> フォルダ）。
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /accordion -->
+        </div>
+      </div>
+    </section>
+
+  </div><!-- /col -->
+</div><!-- /row -->
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ────────────────────────────────────────────────────────────
+// ツールチップエンジン
+// position:fixed + body直下の単一要素で
+// テーブルのスタッキングコンテキスト問題を完全回避
+// ────────────────────────────────────────────────────────────
+(function () {
+  // ツールチップ要素をbody直下に1つだけ作成
+  var tip = document.createElement('div');
+  tip.id = 'bilt-tooltip';
+  document.body.appendChild(tip);
+
+  var hideTimer = null;
+
+  function showTip(el) {
+    var text = el.getAttribute('data-tip');
+    if (!text) return;
+    clearTimeout(hideTimer);
+    tip.textContent = text;
+
+    // まず表示してサイズを取得
+    tip.style.opacity = '0';
+    tip.style.display = 'block';
+
+    var rect = el.getBoundingClientRect();
+    var tw   = tip.offsetWidth;
+    var th   = tip.offsetHeight;
+    var vw   = window.innerWidth;
+    var vh   = window.innerHeight;
+    var GAP  = 10;
+
+    // デフォルト: 要素の上中央
+    var left = rect.left + rect.width / 2 - tw / 2;
+    var top  = rect.top - th - GAP;
+
+    // 右端はみ出し補正
+    if (left + tw > vw - 8) left = vw - tw - 8;
+    // 左端はみ出し補正
+    if (left < 8) left = 8;
+    // 上にはみ出す場合は要素の下に表示
+    if (top < 8) top = rect.bottom + GAP;
+    // それでも下にはみ出す場合はクリップ
+    if (top + th > vh - 8) top = vh - th - 8;
+
+    tip.style.left = left + 'px';
+    tip.style.top  = top  + 'px';
+    tip.style.opacity = '1';
+  }
+
+  function hideTip() {
+    hideTimer = setTimeout(function () {
+      tip.style.opacity = '0';
+    }, 80);
+  }
+
+  // イベント委任 — document全体で[data-tip]を処理
+  document.addEventListener('mouseover', function (e) {
+    var el = e.target.closest('[data-tip]');
+    if (el) showTip(el);
+  });
+  document.addEventListener('mouseout', function (e) {
+    var el = e.target.closest('[data-tip]');
+    if (el) hideTip();
+  });
+  // スクロール時に非表示
+  window.addEventListener('scroll', function () {
+    tip.style.opacity = '0';
+  }, { passive: true });
+})();
+
+// ────────────────────────────────────────────────────────────
+// スクロールスパイ — サイドバーのアクティブリンク更新
+// ────────────────────────────────────────────────────────────
+(function () {
+  var sections = document.querySelectorAll('.help-section');
+  var navLinks = document.querySelectorAll('#helpNav .nav-link');
+
+  function onScroll() {
+    var scrollY = window.scrollY + 140;
+    var current = '';
+    sections.forEach(function (s) {
+      if (s.offsetTop <= scrollY) current = s.id;
+    });
+    navLinks.forEach(function (a) {
+      var href = a.getAttribute('href').slice(1);
+      a.classList.toggle('active', href === current);
+    });
+  }
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+})();
+</script>
+{% endblock %}

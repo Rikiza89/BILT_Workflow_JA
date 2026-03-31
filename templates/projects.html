@@ -1,0 +1,100 @@
+<!-- templates/projects.html -->
+{% extends "base.html" %}
+
+{% block title %}プロジェクト - YOLO Workflow{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-folder"></i> プロジェクト</h2>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createProjectModal">
+                <i class="fas fa-plus"></i> 新しいプロジェクト
+            </button>
+        </div>
+
+        <div class="row">
+            {% for project in projects %}
+            <div class="col-md-4 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ project.name }}</h5>
+                        <p class="card-text">
+                            <small class="text-muted">
+                                学習: {{ project.train_images }} 画像<br>
+                                検証: {{ project.val_images }} 画像<br>
+                                クラス: {{ project.classes }}
+                            </small>
+                        </p>
+                        <a href="{{ url_for('load_project', project_name=project.name) }}" 
+                           class="btn btn-primary">
+                            <i class="fas fa-folder-open"></i> 開く
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            
+            {% if projects|length == 0 %}
+            <div class="col-12">
+                <div class="alert alert-info text-center">
+                    <h4><i class="fas fa-info-circle"></i> プロジェクトが見つかりません</h4>
+                    <p>最初のプロジェクトを作成して開始してください</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Create Project Modal -->
+<div class="modal fade" id="createProjectModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">新しいプロジェクトを作成</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createProjectForm">
+                    <div class="mb-3">
+                        <label for="projectName" class="form-label">プロジェクト名</label>
+                        <input type="text" class="form-control" id="projectName" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                <button type="button" class="btn btn-primary" onclick="createProject()">作成</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function createProject() {
+    const projectName = document.getElementById('projectName').value;
+    
+    if (!projectName) {
+        alert('プロジェクト名を入力してください');
+        return;
+    }
+    
+    fetch('/create_project', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: projectName})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert(data.error || 'プロジェクトの作成に失敗しました');
+        }
+    });
+}
+</script>
+{% endblock %}
