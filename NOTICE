@@ -1,6 +1,6 @@
 BILT_Workflow_JA
 
-Copyright 2026 [Your Name or Organization]
+Copyright 2026 Rikiza89
 
 This product includes software developed by the following third-party projects:
 
@@ -23,7 +23,7 @@ This product includes software developed by the following third-party projects:
 - pywebview (MIT License) — https://github.com/r0x0r/pywebview
 
 This product may also include the BILT library (Because I Like Twice),
-used for object detection functionality.
+used for object detection functionality (Apache License 2.0) — https://docs.python-requests.org/
 
 All third-party components are licensed under their respective licenses.
 
