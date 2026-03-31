@@ -1,0 +1,2 @@
+Requests - Apache License 2.0
+https://docs.python-requests.org/

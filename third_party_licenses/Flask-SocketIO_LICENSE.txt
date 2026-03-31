@@ -1,0 +1,2 @@
+Flask-SocketIO - MIT License
+https://github.com/miguelgrinberg/Flask-SocketIO

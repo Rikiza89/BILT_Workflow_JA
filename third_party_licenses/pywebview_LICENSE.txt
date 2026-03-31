@@ -1,0 +1,2 @@
+pywebview - MIT License
+https://github.com/r0x0r/pywebview

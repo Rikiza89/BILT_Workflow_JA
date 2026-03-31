@@ -1,0 +1,2 @@
+Werkzeug - BSD License
+https://palletsprojects.com/p/werkzeug/

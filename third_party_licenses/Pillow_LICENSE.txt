@@ -1,0 +1,2 @@
+Pillow - HPND License
+https://python-pillow.org/

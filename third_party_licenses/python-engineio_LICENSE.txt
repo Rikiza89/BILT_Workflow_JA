@@ -1,0 +1,2 @@
+python-engineio - MIT License
+https://github.com/miguelgrinberg/python-engineio

@@ -1,0 +1,2 @@
+PyTorch - BSD-style License
+https://pytorch.org/

@@ -1,0 +1,2 @@
+Flask - BSD License
+https://palletsprojects.com/p/flask/
