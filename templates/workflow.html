@@ -1239,6 +1239,8 @@ function showProps(node) {
   wire('cfg-label', 'label');
   wire('cfg-camera_index', 'camera_index', el => isNaN(Number(el.value)) ? el.value : (parseInt(el.value) || 0));
   wire('cfg-model-select', 'model');
+  // BILT model dropdown: save model name immediately on selection change (Load button still needed for classes)
+  wire('cfg-bilt-model-select', 'model');
   wire('cfg-count_required', 'count_required', el => parseInt(el.value)||1);
   wire('cfg-timeout',        'timeout',         el => parseFloat(el.value)||30);
   wire('cfg-conf',           'conf',            el => parseFloat(el.value)||0.25);
@@ -1364,15 +1366,25 @@ function showProps(node) {
   (async () => {
     const sel = document.getElementById('cfg-bilt-model-select');
     if (!sel) return;
-    const r = await fetch('/api/bilt/models').then(r=>r.json()).catch(()=>null);
-    const models = r?.models || [];
+    const [modelsR, infoR] = await Promise.all([
+      fetch('/api/bilt/models').then(r=>r.json()).catch(()=>null),
+      fetch('/api/bilt/model/info').then(r=>r.json()).catch(()=>null),
+    ]);
+    const models = modelsR?.models || [];
+    const globalModel = infoR?.name || '';
     models.forEach(m => {
       const opt = document.createElement('option');
-      opt.value = m.name || m;
-      opt.textContent = m.name || m;
-      if ((m.name || m) === (node.config.model||'')) opt.selected = true;
+      const name = m.name || m;
+      opt.value = name;
+      // Mark the currently loaded global model so the user can see which is active
+      opt.textContent = (globalModel && name === globalModel) ? `${name} ✓ loaded` : name;
+      if (name === (node.config.model || globalModel)) opt.selected = true;
       sel.appendChild(opt);
     });
+    // Auto-save the pre-selected model into node config if not already set
+    if (!node.config.model && sel.value) {
+      node.config.model = sel.value;
+    }
   })();
 
   // Load selected BILT model, populate classes
@@ -1673,8 +1685,22 @@ function startMonitor() {
     if (!cameraRunning) return;
     img.src = currentFrameUrl();
   }
-  img.onload  = () => { if (cameraRunning) frameTimer = setTimeout(scheduleFrame, 250); };
-  img.onerror = () => { if (cameraRunning) frameTimer = setTimeout(scheduleFrame, 1000); };
+  img.onload  = () => {
+    if (!cameraRunning) return;
+    // Remove the "Loading camera…" suffix once first frame arrives
+    if (statusEl.textContent.includes('Loading')) {
+      statusEl.textContent = statusEl.textContent.replace(/ — Loading camera…/, '');
+    }
+    frameTimer = setTimeout(scheduleFrame, 250);
+  };
+  img.onerror = () => {
+    if (!cameraRunning) return;
+    // 204 / no-content means the stream isn't ready yet — show loading state
+    if (statusEl.textContent.startsWith('●') && !statusEl.textContent.includes('Loading')) {
+      statusEl.textContent = statusEl.textContent + ' — Loading camera…';
+    }
+    frameTimer = setTimeout(scheduleFrame, 800);
+  };
 
   // ── Status helper ──────────────────────────────────────────────────────────
   function setStatus(running) {
