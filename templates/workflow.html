@@ -204,17 +204,39 @@
 
   .port-wrap { display: flex; align-items: center; gap: 4px; cursor: crosshair; padding: 3px 0; }
   .port-wrap.out-port { flex-direction: row-reverse; }
+  .port-wrap.top-port, .port-wrap.bottom-port {
+    flex-direction: column; padding: 0 3px;
+  }
 
   .port {
-    width: 12px; height: 12px; border-radius: 50%;
+    width: 14px; height: 14px; border-radius: 50%;
     border: 2px solid #4b5563; background: var(--node-bg);
     cursor: crosshair; flex-shrink: 0;
-    transition: transform .1s, border-color .1s;
+    transition: transform .12s, border-color .12s, box-shadow .12s;
     position: relative;
   }
-  .port.in-port  { margin-left: -7px; }
-  .port.out-port { margin-right: -7px; }
-  .port:hover { transform: scale(1.4); border-color: #fff; }
+  .port.in-port    { margin-left: -8px; }
+  .port.out-port   { margin-right: -8px; }
+  .port.top-port   { margin-top: -8px; }
+  .port.bottom-port { margin-bottom: -8px; }
+  .port:hover { transform: scale(1.5); border-color: #fff; }
+
+  /* snap-to-port highlight during drag */
+  .port.snap-target {
+    transform: scale(1.9) !important;
+    border-color: #60a5fa !important;
+    box-shadow: 0 0 0 3px #60a5fa55, 0 0 10px #60a5faaa;
+  }
+
+  /* top/bottom port rows – absolutely positioned on node boundary */
+  .ports-top, .ports-bottom {
+    position: absolute; left: 0; right: 0;
+    display: flex; justify-content: space-around; align-items: center;
+    padding: 0 16px; pointer-events: none;
+  }
+  .ports-top    { top: -8px; }
+  .ports-bottom { bottom: -8px; }
+  .ports-top .port-wrap, .ports-bottom .port-wrap { pointer-events: all; }
 
   .port-lbl {
     font-size: 10px; font-weight: 600;
@@ -649,8 +671,22 @@ function applyTransform() {
   t.style.transform = `translate(${state.pan.x}px,${state.pan.y}px) scale(${state.zoom})`;
 }
 
-// World-coordinate position of a port
+// World-coordinate position of a port using actual DOM element center
 function portWorldPos(nodeId, portName, isOutput) {
+  const io = isOutput ? 'out' : 'in';
+  const portEl = document.querySelector(
+    `#node-${nodeId} .port[data-nid="${nodeId}"][data-port="${portName}"][data-io="${io}"]`
+  );
+  if (portEl) {
+    const vp = document.getElementById('canvasViewport');
+    const vpRect = vp.getBoundingClientRect();
+    const r = portEl.getBoundingClientRect();
+    return {
+      x: (r.left + r.width  / 2 - vpRect.left - state.pan.x) / state.zoom,
+      y: (r.top  + r.height / 2 - vpRect.top  - state.pan.y) / state.zoom,
+    };
+  }
+  // Geometric fallback when element not yet in DOM
   const node = state.nodes.find(n => n.id === nodeId);
   if (!node) return null;
   const def = DEFS[node.type];
@@ -662,6 +698,25 @@ function portWorldPos(nodeId, portName, isOutput) {
   const y = node.y + (h / (total + 1)) * (idx + 1);
   const x = isOutput ? node.x + NODE_W : node.x;
   return { x, y };
+}
+
+// Return which side a port lives on ('left'|'right'|'top'|'bottom')
+function portSide(nodeId, portName, isOutput) {
+  const node = state.nodes.find(n => n.id === nodeId);
+  if (!node) return isOutput ? 'right' : 'left';
+  const def = DEFS[node.type];
+  const ports = isOutput ? def.outputs : def.inputs;
+  const pd = ports.find(p => p.port === portName);
+  return pd?.side || (isOutput ? 'right' : 'left');
+}
+
+// Cubic bezier path whose control points respect port sides
+function bezierPath(fx, fy, tx, ty, fromSide, toSide) {
+  const CTRL = Math.max(60, Math.max(Math.abs(tx - fx), Math.abs(ty - fy)) * 0.55);
+  const sideVec = { right: [CTRL,0], left: [-CTRL,0], bottom: [0,CTRL], top: [0,-CTRL] };
+  const [fcx, fcy] = sideVec[fromSide] || [CTRL, 0];
+  const [tcx, tcy] = sideVec[toSide]   || [-CTRL, 0];
+  return `M ${fx} ${fy} C ${fx+fcx} ${fy+fcy} ${tx+tcx} ${ty+tcy} ${tx} ${ty}`;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -703,20 +758,34 @@ function renderNode(node) {
   const cfg = node.config || {};
   const lbl = cfg.label || def.label;
 
-  // Output ports html
-  const outPortsHtml = def.outputs.map(o => `
-    <div class="port-wrap out-port ${o.cls}" data-nid="${node.id}" data-port="${o.port}" data-io="out">
-      <span class="port-lbl">${PORT_LABELS[o.port] || o.port}</span>
-      <div class="port out-port" data-nid="${node.id}" data-port="${o.port}" data-io="out"></div>
-    </div>`).join('');
+  // Partition ports by side
+  const allPorts = [
+    ...def.inputs.map(p  => ({ ...p, io: 'in'  })),
+    ...def.outputs.map(p => ({ ...p, io: 'out' })),
+  ];
+  const leftPorts   = allPorts.filter(p => (p.side || (p.io === 'in'  ? 'left'  : 'right')) === 'left');
+  const rightPorts  = allPorts.filter(p => (p.side || (p.io === 'in'  ? 'left'  : 'right')) === 'right');
+  const topPorts    = allPorts.filter(p => p.side === 'top');
+  const bottomPorts = allPorts.filter(p => p.side === 'bottom');
 
-  // Input ports html
-  const inPortsHtml = def.inputs.map(i => `
-    <div class="port-wrap in-port ${i.cls}" data-nid="${node.id}" data-port="${i.port}" data-io="in">
-      <div class="port in-port" data-nid="${node.id}" data-port="${i.port}" data-io="in"></div>
-    </div>`).join('');
+  function portHtml(p, extraCls) {
+    const io  = p.io;
+    const lbl = PORT_LABELS[p.port] || p.port;
+    const showLbl = lbl && lbl !== '';
+    return `<div class="port-wrap ${extraCls} ${p.cls}" data-nid="${node.id}" data-port="${p.port}" data-io="${io}">
+      ${showLbl ? `<span class="port-lbl">${lbl}</span>` : ''}
+      <div class="port ${extraCls}" data-nid="${node.id}" data-port="${p.port}" data-io="${io}"></div>
+    </div>`;
+  }
+
+  const inPortsHtml  = leftPorts.map(p  => portHtml(p, 'in-port')).join('');
+  const outPortsHtml = rightPorts.map(p => portHtml(p, 'out-port')).join('');
+  const topHtml      = topPorts.map(p    => portHtml(p, 'top-port')).join('');
+  const botHtml      = bottomPorts.map(p => portHtml(p, 'bottom-port')).join('');
 
   el.innerHTML = `
+    ${topHtml    ? `<div class="ports-top">${topHtml}</div>`       : ''}
+    ${botHtml    ? `<div class="ports-bottom">${botHtml}</div>`    : ''}
     <div class="node-header" style="background:${def.color}22; border-bottom:1px solid ${def.color}40;">
       <span class="node-icon">${def.icon}</span>
       <span class="node-label">${esc(lbl)}</span>
@@ -744,6 +813,7 @@ function renderNode(node) {
   });
   el.querySelectorAll('.port-wrap[data-io="out"]').forEach(p =>
     p.addEventListener('mousedown', onPortDragStart));
+  // input ports accept drop on mouseup (all sides)
   el.querySelectorAll('.port-wrap[data-io="in"]').forEach(p =>
     p.addEventListener('mouseup', onPortDrop));
 }
@@ -782,8 +852,9 @@ function renderEdges() {
     const tp = portWorldPos(edge.to_node,   edge.to_port,   false);
     if (!fp || !tp) return;
 
-    const dx = Math.max(60, Math.abs(tp.x - fp.x) * 0.55);
-    const d = `M ${fp.x} ${fp.y} C ${fp.x+dx} ${fp.y} ${tp.x-dx} ${tp.y} ${tp.x} ${tp.y}`;
+    const fs = portSide(edge.from_node, edge.from_port, true);
+    const ts = portSide(edge.to_node,   edge.to_port,   false);
+    const d  = bezierPath(fp.x, fp.y, tp.x, tp.y, fs, ts);
 
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('class', 'conn');
@@ -805,10 +876,13 @@ function renderEdges() {
   });
 }
 
-function updateTempPath(x1, y1, x2, y2) {
+function updateTempPath(x1, y1, x2, y2, fromSide) {
   const tp = document.getElementById('tempPath');
-  const dx = Math.max(60, Math.abs(x2-x1) * 0.55);
-  tp.setAttribute('d', `M ${x1} ${y1} C ${x1+dx} ${y1} ${x2-dx} ${y2} ${x2} ${y2}`);
+  const fs = fromSide || 'right';
+  const CTRL = Math.max(60, Math.max(Math.abs(x2-x1), Math.abs(y2-y1)) * 0.55);
+  const sideVec = { right: [CTRL,0], left: [-CTRL,0], bottom: [0,CTRL], top: [0,-CTRL] };
+  const [fcx, fcy] = sideVec[fs] || [CTRL, 0];
+  tp.setAttribute('d', `M ${x1} ${y1} C ${x1+fcx} ${y1+fcy} ${x2-fcx} ${y2-fcy} ${x2} ${y2}`);
 }
 function clearTempPath() {
   document.getElementById('tempPath').setAttribute('d', '');
@@ -869,9 +943,10 @@ function onPortDragStart(e) {
   e.stopPropagation();
   const nid  = e.currentTarget.dataset.nid;
   const port = e.currentTarget.dataset.port;
-  const fp = portWorldPos(nid, port, true);
+  const fp   = portWorldPos(nid, port, true);
   if (!fp) return;
-  state.connecting = { fromNodeId: nid, fromPort: port, fx: fp.x, fy: fp.y };
+  const side = portSide(nid, port, true);
+  state.connecting = { fromNodeId: nid, fromPort: port, fx: fp.x, fy: fp.y, fromSide: side, snapTarget: null };
 }
 
 function onPortDrop(e) {
@@ -879,17 +954,18 @@ function onPortDrop(e) {
   if (!state.connecting) return;
   const toNid  = e.currentTarget.dataset.nid;
   const toPort = e.currentTarget.dataset.port;
-  const { fromNodeId, fromPort } = state.connecting;
+  _commitEdge(toNid, toPort);
+}
 
+function _commitEdge(toNid, toPort) {
+  const { fromNodeId, fromPort } = state.connecting;
   if (fromNodeId === toNid) { finishConnect(); return; }
-  // 重複を回避
   const dup = state.edges.find(
     ed => ed.from_node === fromNodeId && ed.from_port === fromPort
        && ed.to_node   === toNid      && ed.to_port   === toPort
   );
   if (!dup) {
-    const eid = 'e_' + Date.now();
-    state.edges.push({ id: eid, from_node: fromNodeId, from_port: fromPort,
+    state.edges.push({ id: 'e_' + Date.now(), from_node: fromNodeId, from_port: fromPort,
                        to_node: toNid, to_port: toPort });
     renderEdges();
   }
@@ -897,6 +973,7 @@ function onPortDrop(e) {
 }
 
 function finishConnect() {
+  document.querySelectorAll('.port.snap-target').forEach(el => el.classList.remove('snap-target'));
   state.connecting = null;
   clearTempPath();
 }
@@ -931,7 +1008,33 @@ document.addEventListener('mousemove', e => {
 
   if (state.connecting) {
     const w = screenToWorld(e.clientX, e.clientY);
-    updateTempPath(state.connecting.fx, state.connecting.fy, w.x, w.y);
+    const SNAP_R = 44; // world-unit snap radius
+    let nearest = null, nearDist = Infinity;
+    state.nodes.forEach(n => {
+      if (n.id === state.connecting.fromNodeId) return;
+      const def = DEFS[n.type];
+      def.inputs.forEach(inp => {
+        const p = portWorldPos(n.id, inp.port, false);
+        if (!p) return;
+        const d = Math.hypot(p.x - w.x, p.y - w.y);
+        if (d < SNAP_R && d < nearDist) { nearDist = d; nearest = { nodeId: n.id, port: inp.port, pos: p }; }
+      });
+    });
+
+    // Update snap highlight
+    document.querySelectorAll('.port.snap-target').forEach(el => el.classList.remove('snap-target'));
+    if (nearest) {
+      const snapEl = document.querySelector(
+        `#node-${nearest.nodeId} .port[data-io="in"][data-port="${nearest.port}"]`
+      );
+      if (snapEl) snapEl.classList.add('snap-target');
+      state.connecting.snapTarget = nearest;
+      updateTempPath(state.connecting.fx, state.connecting.fy,
+                     nearest.pos.x, nearest.pos.y, state.connecting.fromSide);
+    } else {
+      state.connecting.snapTarget = null;
+      updateTempPath(state.connecting.fx, state.connecting.fy, w.x, w.y, state.connecting.fromSide);
+    }
     return;
   }
 
@@ -944,7 +1047,16 @@ document.addEventListener('mousemove', e => {
 
 document.addEventListener('mouseup', e => {
   if (state.dragging) { state.dragging = null; return; }
-  if (state.connecting) { finishConnect(); return; }
+  if (state.connecting) {
+    // Commit to snap target if mouse released anywhere (not just on port element)
+    const snap = state.connecting.snapTarget;
+    if (snap) {
+      _commitEdge(snap.nodeId, snap.port);
+    } else {
+      finishConnect();
+    }
+    return;
+  }
   if (state.panning) {
     state.panning = false;
     document.getElementById('canvasViewport').classList.remove('panning');
@@ -1753,7 +1865,7 @@ pollStatus().then(() => {
   if (state.wfStatus === 'running' || state.wfStatus === 'paused') {
     startStatusPolling();
   } else {
-    fetch('/api/detection/reset', { method: 'POST' }).catch(() => {});
+    fetch('/api/bilt/detection/reset', { method: 'POST' }).catch(() => {});
   }
 });
 
