@@ -237,26 +237,65 @@ def model_info_route():
 def get_cameras():
     cameras = []
     if sys.platform == 'win32':
-        for i in range(4):
-            try:
-                cap = cv2.VideoCapture(i, cv2.CAP_DSHOW)
-                if cap.isOpened():
-                    cameras.append({'index': i, 'name': f'Camera {i}'})
-                cap.release()
-            except Exception:
-                pass
+        try:
+            import subprocess as _sp
+            result = _sp.run(
+                ['powershell', '-Command',
+                 'Get-PnpDevice -Class Camera | Select-Object FriendlyName,Status | ConvertTo-Json'],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                import json as _json
+                devices = _json.loads(result.stdout)
+                if not isinstance(devices, list):
+                    devices = [devices]
+                idx = 0
+                for dev in devices:
+                    if dev.get('Status') == 'OK':
+                        cameras.append({'index': idx, 'name': dev.get('FriendlyName', f'Camera {idx}')})
+                        idx += 1
+        except Exception:
+            pass
+        if not cameras:
+            for i in range(4):
+                try:
+                    cap = cv2.VideoCapture(i, cv2.CAP_DSHOW)
+                    if cap.isOpened():
+                        cameras.append({'index': i, 'name': f'Camera {i}'})
+                    cap.release()
+                except Exception:
+                    pass
     elif sys.platform.startswith('linux'):
         import glob as _glob
-        nodes = sorted(_glob.glob('/dev/video*'))
-        for node in nodes:
+        # Read device list from sysfs — no VideoCapture open needed, so works even
+        # when a device is already held open by the detection or workflow streams.
+        _SKIP = ('metadata', 'output', 'encoder', 'h264', 'hevc', 'm2m', 'ipu', 'csi')
+        for video_path in sorted(_glob.glob('/sys/class/video4linux/video*')):
             try:
-                idx = int(node.replace('/dev/video', ''))
-                cap = cv2.VideoCapture(idx, cv2.CAP_V4L2)
-                if cap.isOpened():
-                    cameras.append({'index': idx, 'name': f'Camera {idx}'})
-                cap.release()
+                base = os.path.basename(video_path)
+                idx = int(base.replace('video', ''))
+                name = f'Camera {idx}'
+                name_file = os.path.join(video_path, 'name')
+                if os.path.exists(name_file):
+                    with open(name_file) as _f:
+                        n = _f.read().strip()
+                    if n:
+                        name = n
+                if any(k in name.lower() for k in _SKIP):
+                    continue
+                cameras.append({'index': idx, 'name': name})
             except Exception:
                 pass
+        # Fallback: probe indices 0-3 if sysfs yielded nothing
+        if not cameras:
+            for i in range(4):
+                try:
+                    cap = cv2.VideoCapture(i, cv2.CAP_V4L2)
+                    if cap.isOpened():
+                        cameras.append({'index': i, 'name': f'Camera {i}'})
+                    cap.release()
+                except Exception:
+                    pass
     else:
         for i in range(4):
             try:
