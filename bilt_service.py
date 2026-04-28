@@ -2095,6 +2095,8 @@ def workflow_status():
 @app.route('/api/workflow/start', methods=['POST'])
 def workflow_start():
     try:
+        # Release the shared detection camera so workflow per-camera streams can open it
+        camera_manager.release()
         data = request.json or {}
         graph = data.get('graph')
         if graph:
