@@ -1654,7 +1654,12 @@ function startMonitor() {
 
   // ── Populate camera selector ───────────────────────────────────────────────
   async function loadCameras() {
-    const raw     = await fetch('/api/bilt/cameras').then(r=>r.json()).catch(()=>[]);
+    let raw = await fetch('/api/bilt/cameras').then(r=>r.json()).catch(()=>null);
+    // Retry once if the first attempt returned empty (camera may have just been released)
+    if (!raw || !(Array.isArray(raw) ? raw : raw?.cameras || []).length) {
+      await new Promise(r => setTimeout(r, 600));
+      raw = await fetch('/api/bilt/cameras').then(r=>r.json()).catch(()=>[]);
+    }
     const rawList = Array.isArray(raw) ? raw : (raw?.cameras || []);
     const cameras = rawList.map(c => typeof c === 'object'
       ? { idx: c.index ?? 0, name: c.name || `カメラ ${c.index ?? 0}` }
@@ -1885,15 +1890,20 @@ document.querySelectorAll('.wf-modal-overlay').forEach(o => {
 // Init
 // ══════════════════════════════════════════════════════════════════════════════
 applyTransform();
-startMonitor();
-// Poll status once on load: restore if workflow was already running, else reset camera state
-pollStatus().then(() => {
-  if (state.wfStatus === 'running' || state.wfStatus === 'paused') {
-    startStatusPolling();
-  } else {
-    fetch('/api/bilt/detection/reset', { method: 'POST' }).catch(() => {});
+// Check workflow status, release detection camera if idle, THEN start monitor
+// (loadCameras must run after camera is free so the sysfs/probe listing works)
+(async () => {
+  const statusR = await fetch('/api/workflow/status').then(r => r.json()).catch(() => null);
+  const wf = statusR?.workflow || {};
+  const st = wf.status || 'idle';
+  if (st !== 'running' && st !== 'paused') {
+    await fetch('/api/bilt/detection/reset', { method: 'POST' }).catch(() => {});
   }
-});
+  startMonitor();
+  if (wf.status) updateStatusUI(wf.status, wf.current_node_id);
+  if (wf.log?.length) { _lastLogCount = wf.log.length; }
+  if (st === 'running' || st === 'paused') startStatusPolling();
+})();
 
 // ── Browser popup alert system ────────────────────────────────────────────────
 let _popupAlertSince = null;   // null = not yet initialised (skip stale alerts)
