@@ -1706,7 +1706,11 @@ def _wf_start_bilt_streams(graph: dict) -> None:
         cfg = node.get('config', {})
         cam_idx = cfg.get('camera_index')
         model = (cfg.get('model') or '').strip()
+        # Fall back to the globally loaded BILT model when none is set on the node
+        if not model:
+            model = (current_bilt_model_name or '').strip()
         if cam_idx is None or not model:
+            logger.warning(f'bilt_detection node skipped: cam={cam_idx} model="{model}" — assign a model in the node config')
             continue
         seen[int(cam_idx)] = model
 
@@ -1942,7 +1946,10 @@ class WorkflowEngine:
                 self._log('info', f'  BILT カメラストリーム cam{cam_idx} (専用スレッド)')
                 stream.ready.wait(timeout=5.0)
             else:
-                self._log('warning', f'  cam {cam_idx} の BILT ストリームがありません')
+                self._log('error',
+                          f'  cam{cam_idx} のカメラストリームが起動していません。'
+                          f'ノードにBILTモデルが設定されているか確認してください。')
+                return self._handle_failure(node, failure_action, None)
 
         cls_str = ', '.join(target_classes) if target_classes else 'any class'
         cam_tag = f'cam{cam_idx}' if cam_idx is not None else 'global'
@@ -2265,8 +2272,15 @@ def workflow_streams():
 def workflow_detections():
     """ワークフローモニターパネルにおける現在のリアルタイム検出状況。"""
     try:
-        with detection_lock:
-            dets = list(latest_detections)
+        with _bilt_wf_streams_lock:
+            streams_snapshot = dict(_bilt_wf_streams)
+        if streams_snapshot:
+            dets = []
+            for stream in streams_snapshot.values():
+                dets.extend(stream.get_detections())
+        else:
+            with detection_lock:
+                dets = list(latest_detections)
         return jsonify({'success': True, 'detections': dets})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
