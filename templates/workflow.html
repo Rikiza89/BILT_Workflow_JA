@@ -637,7 +637,7 @@ const PORT_OFFSET_X = 8;
 function defCfg(type) {
   switch (type) {
     case 'bilt_detection': return {
-      label: 'BILT検出', model: '', classes: [], count_required: 1,
+      label: 'BILT検出', model: '', camera_index: 0, classes: [], count_required: 1,
       timeout: 30, failure_action: 'alert_pause',
     };
     case 'loop':  return { label: 'ループ', max_iterations: 3 };
@@ -1281,7 +1281,7 @@ function showProps(node) {
   (async () => {
     const camSel = document.getElementById('cfg-camera_index');
     if (!camSel) return;
-    const raw = await fetch('/api/cameras').then(r=>r.json()).catch(()=>[]);
+    const raw = await fetch('/api/bilt/cameras').then(r=>r.json()).catch(()=>[]);
 
     const rawList = Array.isArray(raw) ? raw : (raw?.cameras || []);
     const cameras = rawList.map(c => typeof c === 'object'
@@ -1654,7 +1654,7 @@ function startMonitor() {
 
   // ── Populate camera selector ───────────────────────────────────────────────
   async function loadCameras() {
-    const raw     = await fetch('/api/cameras').then(r=>r.json()).catch(()=>[]);
+    const raw     = await fetch('/api/bilt/cameras').then(r=>r.json()).catch(()=>[]);
     const rawList = Array.isArray(raw) ? raw : (raw?.cameras || []);
     const cameras = rawList.map(c => typeof c === 'object'
       ? { idx: c.index ?? 0, name: c.name || `カメラ ${c.index ?? 0}` }
@@ -1755,19 +1755,19 @@ function startMonitor() {
   // ── Manual start/stop button ───────────────────────────────────────────────
   btn.addEventListener('click', async () => {
     if (cameraRunning) {
-      if (!wfMode) await api('/api/stop_detection', 'POST');
+      if (!wfMode) await api('/api/bilt/detection/stop', 'POST');
       setStatus(false);
       return;
     }
     const camVal = sel.value;
     btn.textContent = '開始中…'; btn.disabled = true;
     const camIdx = isNaN(Number(camVal)) ? camVal : (parseInt(camVal) || 0);
-    const selR = await api('/api/select_camera', 'POST', { camera_index: camIdx });
+    const selR = await api('/api/bilt/camera/select', 'POST', { camera_index: camIdx });
     if (!selR.success) {
       toast('カメラ選択に失敗しました: ' + (selR.error||''));
       btn.disabled = false; setStatus(false); return;
     }
-    const startR = await api('/api/start_detection', 'POST');
+    const startR = await api('/api/bilt/detection/start', 'POST');
     btn.disabled = false;
     if (!startR.success) {
       toast('開始に失敗しました: ' + (startR.error||''));
