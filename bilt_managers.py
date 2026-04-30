@@ -148,8 +148,20 @@ class EnhancedCameraManager:
         cameras = []
         camera_names = {}
 
-        # ── Windows: PowerShell 経由でフレンドリ名をクエリする ──────────────────────
+        # ── Windows: DirectShow probe (same backend as initialize_camera) + PowerShell names ──
         if sys.platform == 'win32':
+            # Probe with DirectShow first to discover real, working cv2 indices.
+            # Then zip PowerShell friendly-names by position — both enumerate in the same order.
+            working_indices: list = []
+            for i in range(5):
+                try:
+                    cap = cv2.VideoCapture(i, cv2.CAP_DSHOW)
+                    if cap.isOpened():
+                        working_indices.append(i)
+                    cap.release()
+                except Exception:
+                    pass
+            ps_names: list = []
             try:
                 import subprocess as _sp
                 result = _sp.run(
@@ -162,11 +174,29 @@ class EnhancedCameraManager:
                     devices = json.loads(result.stdout)
                     if not isinstance(devices, list):
                         devices = [devices]
-                    for idx, dev in enumerate(devices):
-                        if dev.get('Status') == 'OK':
-                            camera_names[idx] = dev.get('FriendlyName', f'Camera {idx}')
+                    ps_names = [d.get('FriendlyName', '') for d in devices if d.get('Status') == 'OK']
             except Exception:
                 pass
+            for pos, idx in enumerate(working_indices):
+                name = ps_names[pos] if pos < len(ps_names) and ps_names[pos] else f'Camera {idx}'
+                # Open once more to read resolution/fps
+                try:
+                    cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)
+                    if cap.isOpened():
+                        cameras.append({
+                            'index':  idx,
+                            'width':  int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                            'height': int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                            'fps':    cap.get(cv2.CAP_PROP_FPS),
+                            'name':   name,
+                        })
+                        cap.release()
+                    else:
+                        cap.release()
+                        cameras.append({'index': idx, 'width': 640, 'height': 480, 'fps': 30.0, 'name': name})
+                except Exception:
+                    cameras.append({'index': idx, 'width': 640, 'height': 480, 'fps': 30.0, 'name': name})
+            return cameras
 
         # ── Linux: /dev/video* ノードをプローブする ────────────────────────────────────
         elif sys.platform.startswith('linux'):

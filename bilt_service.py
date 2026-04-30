@@ -237,34 +237,39 @@ def model_info_route():
 def get_cameras():
     cameras = []
     if sys.platform == 'win32':
+        # Step 1: probe DirectShow indices that actually open — these are the real cv2 indices.
+        # DirectShow is also what initialize_camera() tries first, so the indices must match.
+        working_indices = []
+        for i in range(5):
+            try:
+                cap = cv2.VideoCapture(i, cv2.CAP_DSHOW)
+                if cap.isOpened():
+                    working_indices.append(i)
+                cap.release()
+            except Exception:
+                pass
+        # Step 2: collect friendly names from PowerShell in the order DirectShow enumerates them.
+        # PowerShell and DirectShow enumerate in the same insertion order on the same machine,
+        # so we can zip them positionally.
+        ps_names: list = []
         try:
             import subprocess as _sp
+            import json as _json
             result = _sp.run(
                 ['powershell', '-Command',
                  'Get-PnpDevice -Class Camera | Select-Object FriendlyName,Status | ConvertTo-Json'],
                 capture_output=True, text=True, timeout=5,
             )
             if result.returncode == 0 and result.stdout.strip():
-                import json as _json
                 devices = _json.loads(result.stdout)
                 if not isinstance(devices, list):
                     devices = [devices]
-                idx = 0
-                for dev in devices:
-                    if dev.get('Status') == 'OK':
-                        cameras.append({'index': idx, 'name': dev.get('FriendlyName', f'Camera {idx}')})
-                        idx += 1
+                ps_names = [d.get('FriendlyName', '') for d in devices if d.get('Status') == 'OK']
         except Exception:
             pass
-        if not cameras:
-            for i in range(4):
-                try:
-                    cap = cv2.VideoCapture(i, cv2.CAP_DSHOW)
-                    if cap.isOpened():
-                        cameras.append({'index': i, 'name': f'Camera {i}'})
-                    cap.release()
-                except Exception:
-                    pass
+        for pos, idx in enumerate(working_indices):
+            name = ps_names[pos] if pos < len(ps_names) and ps_names[pos] else f'Camera {idx}'
+            cameras.append({'index': idx, 'name': name})
     elif sys.platform.startswith('linux'):
         import glob as _glob
         # Read device list from sysfs — no VideoCapture open needed, so works even
@@ -1734,22 +1739,31 @@ _bilt_wf_streams: dict = {}
 _bilt_wf_streams_lock = threading.Lock()
 
 
-def _wf_start_bilt_streams(graph: dict) -> None:
-    """Start one BiltPerCameraStream per unique camera in bilt_detection nodes."""
+def _wf_start_bilt_streams(graph: dict) -> list:
+    """Start one BiltPerCameraStream per unique camera in bilt_detection nodes.
+
+    Returns a list of error strings. An empty list means everything started successfully.
+    """
     _wf_stop_bilt_streams()
     nodes = graph.get('nodes', [])
     seen: dict = {}
+    errors: list = []
+
     for node in nodes:
         if node.get('type') != 'bilt_detection':
             continue
         cfg = node.get('config', {})
+        label = cfg.get('label', 'BILT Detection')
         cam_idx = cfg.get('camera_index')
         model = (cfg.get('model') or '').strip()
         # Fall back to the globally loaded BILT model when none is set on the node
         if not model:
             model = (current_bilt_model_name or '').strip()
-        if cam_idx is None or not model:
-            logger.warning(f'bilt_detection node skipped: cam={cam_idx} model="{model}" — assign a model in the node config')
+        if cam_idx is None:
+            errors.append(f'Node "{label}": no camera selected — open the node config and choose a camera.')
+            continue
+        if not model:
+            errors.append(f'Node "{label}" (camera {cam_idx}): no model assigned — open the node config and select a BILT model.')
             continue
         seen[int(cam_idx)] = model
 
@@ -1764,7 +1778,13 @@ def _wf_start_bilt_streams(graph: dict) -> None:
                 _bilt_wf_streams[cam_idx] = stream
                 logger.info(f'BiltPerCameraStream[{cam_idx}] started with model {model_path}')
             else:
+                errors.append(
+                    f'Camera {cam_idx}: failed to open. Check that the camera is connected, '
+                    f'not in use by another application, and that the index is correct.'
+                )
                 logger.error(f'BiltPerCameraStream[{cam_idx}] failed to start')
+
+    return errors
 
 
 def _wf_stop_bilt_streams() -> None:
@@ -2149,7 +2169,13 @@ def workflow_start():
             ok, msg = workflow_engine.load(graph)
             if not ok:
                 return jsonify({'success': False, 'error': msg})
-            _wf_start_bilt_streams(graph)
+            stream_errors = _wf_start_bilt_streams(graph)
+            if stream_errors:
+                _wf_stop_bilt_streams()
+                return jsonify({
+                    'success': False,
+                    'error': 'Workflow cannot start — fix the following issues:\n' + '\n'.join(f'• {e}' for e in stream_errors),
+                })
         ok, msg = workflow_engine.start()
         return jsonify({'success': ok, 'error': None if ok else msg})
     except Exception as e:
