@@ -194,6 +194,71 @@ def get_model_params():
         return jsonify({'error': str(exc)}), 500
 
 
+def _read_model_metadata(model_path: str) -> dict:
+    """Read class_names/variant/num_classes from a .pth checkpoint without
+    loading the full tensor weights.
+
+    PyTorch .pth files are ZIP archives.  The pickle data (data.pkl) encodes
+    the checkpoint dict and references tensors via persistent IDs that point at
+    separate binary blobs inside the ZIP.  By intercepting those persistent
+    loads and the tensor-rebuild calls we can deserialise the dict — including
+    all plain-Python values like class_names — while never touching the large
+    weight blobs.
+    """
+    import zipfile
+    import pickle
+    import io
+
+    class _SkipTensorUnpickler(pickle.Unpickler):
+        def persistent_load(self, pid):
+            # pid = ('storage', storage_type, key, location, size)
+            # Return a sentinel so _rebuild_tensor_v2 receives something hashable.
+            return None
+
+        def find_class(self, module, name):
+            if name in ('_rebuild_tensor_v2', '_rebuild_tensor'):
+                return lambda *a, **kw: None
+            # Allow everything else (builtins, collections, etc.)
+            return super().find_class(module, name)
+
+    with zipfile.ZipFile(model_path, 'r') as zf:
+        pkl_candidates = [n for n in zf.namelist() if n.endswith('data.pkl')]
+        if not pkl_candidates:
+            raise ValueError('No data.pkl found inside .pth archive')
+        with zf.open(pkl_candidates[0]) as fh:
+            data = _SkipTensorUnpickler(io.BytesIO(fh.read())).load()
+
+    if not isinstance(data, dict):
+        raise ValueError('Checkpoint is not a dict')
+    return data
+
+
+@app.route('/api/bilt/model/classes')
+def get_model_classes():
+    """Return class names for a model without loading the full weights.
+    Query param: name=<model filename>
+    """
+    name = request.args.get('name', '').strip()
+    if not name:
+        return jsonify({'error': 'name parameter required'}), 400
+    model_path = os.path.join(BILT_MODELS_DIR, name)
+    if not name.endswith('.pth'):
+        model_path += '.pth'
+    if not os.path.isfile(model_path):
+        return jsonify({'error': f'Model not found: {name}'}), 404
+    try:
+        meta = _read_model_metadata(model_path)
+        return jsonify({
+            'success':     True,
+            'class_names': meta.get('class_names', []),
+            'variant':     meta.get('variant', ''),
+            'num_classes': meta.get('num_classes', 0),
+        })
+    except Exception as exc:
+        logger.error(f'get_model_classes error: {exc}')
+        return jsonify({'error': str(exc)}), 500
+
+
 @app.route('/api/bilt/model/load', methods=['POST'])
 def load_model():
     global current_bilt_model, current_bilt_model_name, model_info

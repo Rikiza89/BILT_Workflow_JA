@@ -1387,20 +1387,21 @@ function showProps(node) {
     }
   })();
 
-  // Load selected BILT model, populate classes
+  // Load class names for the selected BILT model (fast — reads metadata only, no full weight load)
   document.getElementById('btnLoadBiltModel')?.addEventListener('click', async () => {
     const sel = document.getElementById('cfg-bilt-model-select');
     const modelName = sel?.value || '';
     if (!modelName) { alert('ドロップダウンからBILTモデルを選択してください。'); return; }
     const btn = document.getElementById('btnLoadBiltModel');
     btn.textContent = '読み込み中…'; btn.disabled = true;
-    const lr = await api('/api/bilt/model/load', 'POST', { model_name: modelName }).catch(()=>null);
+    const lr = await fetch(`/api/bilt/model/classes?name=${encodeURIComponent(modelName)}`)
+      .then(r => r.json()).catch(() => null);
     btn.textContent = '↓ 選択したモデルをロード & クラス'; btn.disabled = false;
     if (!lr || !lr.success) {
-      alert('BILTモデルの読み込みに失敗しました: ' + (lr?.error || 'unknown error')); return;
+      alert('クラスの読み込みに失敗しました: ' + (lr?.error || 'unknown error')); return;
     }
     node.config.model = modelName;
-    const allClasses = lr.model_info?.classes || [];
+    const allClasses = lr.class_names || [];
     node.config.availableClasses = allClasses;
     node.config.classes = [];
     const dd = document.getElementById('classesDropdown');
